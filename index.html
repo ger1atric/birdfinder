@@ -2,323 +2,294 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f5f3f0">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>birdfinder</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231a6fe0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 7h.01'/%3E%3Cpath d='M3.4 18H12a8 8 0 0 0 8-8V7a4 4 0 0 0-7.28-2.3L2 20'/%3E%3Cpath d='m20 7 2 .5-2 .5'/%3E%3Cpath d='M10 18v3'/%3E%3Cpath d='M14 17.75V21'/%3E%3Cpath d='M7 18a6 6 0 0 0 3.84-10.61'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 :root{
-  --bg:#f9f9f7; --panel:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --dim:#898781;
-  --line:#e1e0d9; --accent:#2a78d6; --accent-soft:#e8f0fb; --warn:#a8571b;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","Segoe UI",Roboto,sans-serif;
+  --panel:rgba(255,255,255,.93); --solid:#fff; --ink:#15171c; --ink2:#4a4f5c; --dim:#878c98;
+  --line:#e8e9ed; --soft:#f2f3f5; --accent:#1a6fe0; --accent-ink:#fff;
+  --sel:#15171c; --sel-ink:#fff; --fresh:#15803d; --warn:#b45309;
+  --shadow:0 10px 30px rgba(15,20,30,.16),0 1px 3px rgba(15,20,30,.08);
+  --sheet:50vh;
 }
 @media (prefers-color-scheme:dark){
-  :root{ --bg:#0d0d0d; --panel:#1a1a19; --ink:#fff; --ink2:#c3c2b7; --dim:#898781;
-    --line:#2c2c2a; --accent:#3987e5; --accent-soft:#1d2a3a; --warn:#e0a066; }
+  :root{ --panel:rgba(27,28,32,.93); --solid:#1d1e23; --ink:#f2f3f5; --ink2:#c3c7d0; --dim:#8c919d;
+    --line:#2f3138; --soft:#272930; --accent:#6aa5ff; --accent-ink:#0b1220;
+    --sel:#f2f3f5; --sel-ink:#15171c; --fresh:#4ade80; --warn:#f0a35c;
+    --shadow:0 10px 30px rgba(0,0,0,.5); }
 }
 *{box-sizing:border-box}
-body{margin:0;font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;
-  background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
-a{color:var(--accent)}
-button{font:inherit;cursor:pointer}
-input,select{font:inherit;color:inherit;background:var(--panel);
-  border:1px solid var(--line);border-radius:8px;padding:.45rem .6rem}
-input:focus,select:focus{outline:2px solid var(--accent);outline-offset:-1px}
+html,body{height:100%;margin:0}
+body{font:15px/1.45 var(--font);color:var(--ink);background:#ece9e3;overflow:hidden;
+  -webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0;padding:0}
+input,select{font:inherit;color:inherit}
+a{color:var(--accent);text-decoration:none}
+svg{flex:none;display:block}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#map{position:fixed;inset:0;z-index:0;background:#ece9e3}
+/* calm the OSM palette so the bird photos carry the colour. Per tile, not on the
+   pane: a filtered pane is composited as one layer and shows seams between tiles. */
+.leaflet-tile{filter:saturate(.55) contrast(.9) brightness(1.05)}
 
-header{display:flex;align-items:baseline;gap:.75rem;padding:.75rem 1.1rem;
-  border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
-header h1{font-size:1.1rem;margin:0;letter-spacing:-.01em}
-header .sub{color:var(--dim);font-size:.85rem;flex:1}
-.linkbtn{background:none;border:none;color:var(--accent);padding:.2rem .4rem;
-  border-radius:6px;font-size:.88rem}
-.linkbtn:hover{background:var(--accent-soft)}
+/* ---- the one panel: search on top, results below (bottom sheet on phones) ---- */
+.panel{position:fixed;z-index:1000;top:12px;left:12px;bottom:12px;width:400px;display:flex;
+  flex-direction:column;background:var(--panel);border-radius:18px;box-shadow:var(--shadow);
+  backdrop-filter:saturate(1.4) blur(18px);-webkit-backdrop-filter:saturate(1.4) blur(18px);
+  overflow:hidden}
+.grab{display:none}
+.top{position:relative;z-index:5;padding:14px 14px 10px;display:flex;flex-direction:column;
+  gap:10px;border-bottom:1px solid var(--line)}
+.ph{display:flex;align-items:center;gap:6px}
+.brand{display:flex;align-items:center;gap:7px;font-weight:700;font-size:17px;
+  letter-spacing:-.01em;margin-right:auto}
+.brand svg{color:var(--accent)}
+.pill{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;
+  border-radius:999px;background:var(--soft);font-size:13.5px;color:var(--ink2);max-width:200px}
+.pill span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.icon{width:34px;height:34px;border-radius:999px;display:grid;place-items:center;color:var(--ink2)}
+.icon:hover,.pill:hover{background:var(--line)}
+.icon.on{background:var(--sel);color:var(--sel-ink)}
 
-/* three panes: controls | map | results */
-.wrap{display:grid;grid-template-columns:310px 1fr 370px;height:calc(100vh - 53px)}
-aside{background:var(--panel);overflow-y:auto;padding:.9rem}
-aside.controls{border-right:1px solid var(--line)}
-aside.results{border-left:1px solid var(--line);padding:0;scrollbar-gutter:stable}
-main{display:flex;flex-direction:column;min-width:0}
-#map{flex:1;background:var(--line)}
-@media (max-width:1180px){
-  .wrap{grid-template-columns:280px 1fr;height:calc(100vh - 53px)}
-  aside.results{grid-column:1/-1;border-left:none;border-top:1px solid var(--line);
-    max-height:46vh}
-}
-@media (max-width:820px){
-  .wrap{grid-template-columns:1fr;height:auto}
-  /* flex:none is required: the base rule's flex:1 means flex-basis:0%, which
-     collapses the map to zero height once .wrap stops having a fixed height. */
-  #map{flex:none;height:52vh;min-height:320px}
-  aside.results{max-height:none}
-}
-
-section.card{margin-bottom:1rem}
-section.card h2{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;
-  color:var(--dim);margin:0 0 .5rem}
-
-.searchbox{position:relative}
-.searchbox input{width:100%}
-.sugg{position:absolute;z-index:1200;left:0;right:0;top:100%;margin-top:4px;
-  background:var(--panel);border:1px solid var(--line);border-radius:10px;
-  box-shadow:0 8px 24px rgba(0,0,0,.16);max-height:300px;overflow-y:auto;display:none}
+.search{position:relative;display:flex;align-items:center;gap:8px;height:44px;padding:0 12px;
+  background:var(--soft);border-radius:12px;border:1px solid transparent}
+.search:focus-within{border-color:var(--accent);background:var(--solid)}
+.search svg{color:var(--dim)}
+.search input{flex:1;min-width:0;border:0;outline:0;background:none;font-size:15px}
+.optm{display:none;width:32px;height:32px;margin-right:-6px}
+.sugg{position:absolute;left:0;right:0;top:50px;z-index:10;background:var(--solid);
+  border-radius:12px;box-shadow:var(--shadow);max-height:320px;overflow-y:auto;display:none;padding:4px}
 .sugg.on{display:block}
-.sugg div{padding:.42rem .6rem;cursor:pointer;display:flex;gap:.5rem;align-items:baseline}
-.sugg div:hover,.sugg div.sel{background:var(--accent-soft)}
-.sugg .t{font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);
-  min-width:50px}
+.sugg div{display:flex;gap:10px;align-items:baseline;padding:9px 10px;border-radius:8px;cursor:pointer}
+.sugg div:hover,.sugg div.sel{background:var(--soft)}
+.sugg .k{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);width:52px;flex:none}
 .sugg .n{flex:1}
-.sugg .c{color:var(--dim);font-size:.8rem}
+.sugg .c{font-size:12.5px;color:var(--dim)}
 
-.chips{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.55rem}
-.chip{background:var(--accent-soft);color:var(--accent);border-radius:999px;
-  padding:.2rem .55rem;font-size:.85rem;display:flex;gap:.35rem;align-items:center;
-  max-width:100%;min-width:0}
-/* belt and braces: no matter how a label is derived, it can't blow out the panel */
-.chip b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.chip .x{cursor:pointer;opacity:.6;line-height:1}
-.chip .x:hover{opacity:1}
-.quick{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.5rem}
-.quick button{background:none;border:1px solid var(--line);border-radius:999px;
-  padding:.18rem .5rem;font-size:.8rem;color:var(--ink2)}
-.quick button:hover{border-color:var(--accent);color:var(--accent)}
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -14px;padding:0 14px}
+.chips::-webkit-scrollbar,.birds::-webkit-scrollbar{display:none}
+.chip{flex:none;display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 13px;
+  border-radius:999px;border:1px solid var(--line);background:var(--solid);font-size:13.5px;
+  color:var(--ink2);white-space:nowrap}
+.chip:hover{border-color:var(--dim)}
+.chip.on{background:var(--sel);border-color:var(--sel);color:var(--sel-ink)}
+.chip .x{opacity:.7;margin-right:-5px}
 
-.row{display:flex;gap:.6rem;align-items:center;margin-bottom:.5rem}
-.row label{font-size:.85rem;color:var(--ink2);min-width:70px;flex:none}
-.row input{min-width:0}
-/* Slider rows stack: a range input won't shrink below its intrinsic width, so
-   sitting it beside a label and a readout pushed the value off the panel. */
-.srow{margin-bottom:.75rem}
-.srow .top{display:flex;justify-content:space-between;align-items:baseline;gap:.5rem;
-  font-size:.85rem;color:var(--ink2);margin-bottom:.2rem}
-.srow .top output{font-variant-numeric:tabular-nums;color:var(--ink);font-weight:600;
-  white-space:nowrap}
-input[type=range]{display:block;width:100%;min-width:0;accent-color:var(--accent);margin:0}
-.checks{display:flex;flex-wrap:wrap;gap:.7rem;font-size:.85rem;color:var(--ink2)}
-.checks label{display:flex;gap:.3rem;align-items:center;cursor:pointer}
+.filters{display:flex;gap:8px}
+.seg{display:flex;background:var(--soft);border-radius:10px;padding:3px;flex:1;min-width:0}
+.seg button{flex:1;height:28px;border-radius:7px;font-size:13px;color:var(--ink2);
+  white-space:nowrap;font-variant-numeric:tabular-nums}
+.seg button.on{background:var(--solid);color:var(--ink);font-weight:600;
+  box-shadow:0 1px 2px rgba(0,0,0,.14)}
+.seg.sm{flex:none}
+.seg.sm button{padding:0 10px;height:26px;font-size:12.5px}
 
-#go{width:100%;background:var(--accent);color:#fff;border:none;border-radius:9px;
-  padding:.55rem;font-weight:600;margin-top:.3rem}
-#go:disabled{opacity:.5;cursor:default}
-.prog{height:3px;background:var(--line);border-radius:2px;overflow:hidden;margin-top:.5rem;display:none}
-.prog.on{display:block}
-.prog i{display:block;height:100%;background:var(--accent);width:0;transition:width .2s}
-.note{font-size:.8rem;color:var(--dim);margin:.4rem 0 0}
-.err{color:var(--warn);font-size:.85rem;margin-top:.5rem}
+.prog{position:absolute;left:0;right:0;bottom:-1px;height:2px;overflow:hidden}
+.prog i{display:block;height:100%;width:0;background:var(--accent);transition:width .25s,opacity .3s}
 
-/* results pane */
-.rhead{position:sticky;top:0;background:var(--panel);z-index:5;padding:.7rem .8rem .55rem;
-  border-bottom:1px solid var(--line)}
-.rhead .count{font-size:.88rem;color:var(--ink2);margin-bottom:.5rem}
-.rtools{display:flex;gap:.4rem;align-items:center}
-.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
-.seg button{background:none;border:none;padding:.25rem .6rem;font-size:.83rem;color:var(--ink2)}
-.seg button.on{background:var(--accent);color:#fff}
-#sort{flex:1;padding:.25rem .4rem;font-size:.83rem}
+.scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}
 
-/* legend — the species key */
-.legend{padding:.7rem .5rem .5rem;border-bottom:1px solid var(--line)}
-.legend h3{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);
-  margin:0 0 .5rem;display:flex;justify-content:space-between;align-items:baseline}
-.legend h3 button{font-size:.72rem;text-transform:none;letter-spacing:0}
-/* a broad search can key 15+ species — scroll rather than push results off-screen.
-   overflow-x must be pinned: setting only overflow-y computes overflow-x to auto,
-   and any row wider than the box then adds a stray horizontal scrollbar. */
-.lwrap{max-height:224px;overflow-y:auto;overflow-x:hidden}
-.lrow{display:flex;align-items:center;gap:.55rem;padding:.3rem .35rem;cursor:pointer;
-  border-radius:7px}
-.lrow:hover{background:var(--accent-soft)}
-.lrow.off{opacity:.35}
-.lrow .nm{flex:1;font-size:.88rem;line-height:1.3}
-.lrow .ct{font-size:.8rem;color:var(--dim);font-variant-numeric:tabular-nums;
-  min-width:2em;text-align:right;padding-right:.2rem;flex:none}
+/* options */
+.opts{display:none;padding:14px;border-bottom:1px solid var(--line);gap:14px;flex-direction:column}
+.opts.on{display:flex}
+.opts h4{margin:0 0 6px;font-size:12px;font-weight:600;color:var(--dim);text-transform:uppercase;
+  letter-spacing:.05em}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:38px;
+  padding:0 14px;border-radius:10px;background:var(--soft);font-size:14px;font-weight:500;
+  color:var(--ink);white-space:nowrap}
+.btn:hover{background:var(--line)}
+.btn.primary{background:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.grow{flex:1}
+.sw{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:14px;cursor:pointer}
+.sw input{appearance:none;-webkit-appearance:none;width:40px;height:24px;border-radius:999px;
+  background:var(--line);position:relative;cursor:pointer;transition:background .2s;flex:none;margin:0}
+.sw input::before{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;
+  border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .2s}
+.sw input:checked{background:var(--accent)}
+.sw input:checked::before{transform:translateX(16px)}
+.field input{width:100%;height:40px;border-radius:10px;border:1px solid var(--line);
+  background:var(--solid);padding:0 12px}
+.hint{font-size:12.5px;color:var(--dim);margin-top:5px}
+.banner{margin:12px 14px 0;padding:10px 12px;border-radius:10px;background:rgba(180,83,9,.1);
+  color:var(--warn);font-size:13.5px}
+.banner:empty{display:none}
 
-/* the colour key used everywhere the name is already written out */
-.sw{display:inline-block;width:10px;height:10px;border-radius:50%;flex:none;
-  background:var(--c);box-shadow:0 0 0 1.5px rgba(255,255,255,.9),0 1px 2px rgba(0,0,0,.3)}
-.leaflet-div-icon.pin{background:none;border:none}
-.mk{display:block;position:relative;transform:translate(-50%,-50%);
-  transition:transform .12s ease}
-.pin:hover .mk{transform:translate(-50%,-50%) scale(1.18);z-index:900}
-.pin.sel .mk{transform:translate(-50%,-50%) scale(1.2)}
+/* results list */
+.sum{display:flex;align-items:center;gap:8px;padding:12px 14px 10px}
+.sum .t{flex:1;min-width:0;font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sum .t small{font-weight:400;color:var(--dim);font-size:13.5px}
+.mini{height:32px;border-radius:9px;border:1px solid var(--line);background:var(--solid);
+  font-size:13px;padding:0 6px;color:var(--ink2)}
+.birds{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:0 14px 12px}
+.bird{flex:none;display:flex;align-items:center;gap:7px;height:38px;padding:0 12px 0 3px;
+  border-radius:999px;background:var(--soft);font-size:13px;max-width:230px;color:var(--ink)}
+.bird.all{padding:0 13px}
+.bird img,.bird .ph0{width:32px;height:32px;border-radius:50%;object-fit:cover;flex:none;
+  border:2.5px solid var(--c);background:var(--line)}
+.bird .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bird .ct{color:var(--dim);font-variant-numeric:tabular-nums}
+.bird.on{background:var(--sel);color:var(--sel-ink)}
+.bird.on .ct{color:inherit;opacity:.7}
 
-/* photo pin: the bird itself, ringed in its key colour.
-   The .leaflet-marker-pane selector is needed to outrank Leaflet's own
-   ".leaflet-container .leaflet-marker-pane img{width:auto}", which otherwise
-   sizes the photo to its natural aspect ratio instead of a circle. */
-.thumb,
-.leaflet-marker-pane img.thumb{display:block;width:34px;height:34px;border-radius:50%;
+.card{display:flex;gap:12px;padding:12px 14px;border-top:1px solid var(--line);cursor:pointer}
+.card:hover,.card.hl{background:var(--soft)}
+.tw{position:relative;flex:none;width:48px;height:48px}
+.tw img,.tw .ph0{width:48px;height:48px;border-radius:50%;object-fit:cover;display:block;
+  border:2.5px solid var(--c);background:var(--line)}
+.tw .plus{position:absolute;right:-4px;bottom:-2px;min-width:20px;height:20px;padding:0 5px;
+  border-radius:999px;background:var(--sel);color:var(--sel-ink);font-size:11px;font-weight:700;
+  line-height:20px;text-align:center;box-shadow:0 0 0 2px var(--solid)}
+.main{flex:1;min-width:0}
+.card .nm{font-weight:600;font-size:15px;line-height:1.3;display:-webkit-box;
+  -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card .sub{font-size:13px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--ink2);margin-top:4px;
+  flex-wrap:wrap}
+.meta svg{color:var(--dim)}
+.meta .sep::before{content:"·";color:var(--dim)}
+.dim{color:var(--dim)}
+.fresh{color:var(--fresh);font-weight:600}
+.card .spp{font-size:13px;color:var(--dim);margin-top:3px;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+
+/* grouped by bird */
+.gh{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:10px;padding:10px 14px;
+  background:var(--solid);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.gh img,.gh .ph0{width:36px;height:36px;border-radius:50%;object-fit:cover;flex:none;
+  border:2.5px solid var(--c);background:var(--line)}
+.gh .n{flex:1;font-weight:700}
+.gh .ct{font-size:12.5px;color:var(--dim)}
+.gr{padding:10px 14px 10px 60px;border-bottom:1px solid var(--line);cursor:pointer}
+.gr:hover,.gr.hl{background:var(--soft)}
+.gr .nm{font-weight:600;font-size:14px;line-height:1.3}
+
+/* place + route views */
+.back{display:inline-flex;align-items:center;gap:2px;height:32px;padding:0 10px 0 4px;
+  margin:10px 8px 0;border-radius:8px;color:var(--ink2);font-size:14px;max-width:calc(100% - 16px)}
+.back span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.back:hover{background:var(--soft)}
+.pt{padding:4px 14px 0;font-size:21px;font-weight:700;letter-spacing:-.01em;line-height:1.25}
+.ps{padding:3px 14px 0;color:var(--dim);font-size:14px}
+.actions{display:flex;gap:8px;padding:14px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 14px 12px}
+.stat{background:var(--soft);border-radius:12px;padding:10px 12px;min-width:0}
+.stat b{display:block;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat span{font-size:12px;color:var(--dim)}
+.note{display:flex;gap:8px;align-items:center;margin:0 14px 12px;font-size:13.5px;color:var(--ink2)}
+.note svg{color:var(--dim)}
+.sect{padding:8px 14px 6px;font-size:12px;font-weight:600;color:var(--dim);text-transform:uppercase;
+  letter-spacing:.05em}
+.sp{display:flex;gap:12px;align-items:center;padding:10px 14px;border-top:1px solid var(--line)}
+.sp img,.sp .ph0{width:54px;height:54px;border-radius:14px;object-fit:cover;flex:none;
+  border:2.5px solid var(--c);background:var(--line)}
+.sp .nm{font-weight:600}
+.sp .w{font-size:13px;color:var(--dim)}
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;margin-left:6px;
+  color:var(--warn);border:1px solid currentColor;vertical-align:1px}
+.rsum{padding:6px 14px 0;display:flex;align-items:baseline;gap:8px}
+.rsum b{font-size:26px;font-weight:700;letter-spacing:-.01em}
+.rsum span{color:var(--dim)}
+.steps{list-style:none;margin:0;padding:0}
+.steps li{display:flex;gap:12px;align-items:center;padding:10px 14px;border-top:1px solid var(--line);
+  font-size:14px}
+.steps .ic{width:30px;height:30px;border-radius:9px;background:var(--soft);display:grid;
+  place-items:center;flex:none;color:var(--ink2)}
+.steps .d{font-size:12.5px;color:var(--dim)}
+.empty{padding:32px 22px;text-align:center;color:var(--ink2)}
+.empty h3{margin:0 0 6px;font-size:16px;color:var(--ink)}
+.empty p{margin:0}
+.empty .row{justify-content:center;margin-top:14px}
+.empty .field{text-align:left;margin-top:14px}
+
+/* map markers */
+.leaflet-div-icon.pin{background:none;border:0}
+.mk{position:relative;display:block;transform:translate(-50%,-50%);transition:transform .15s}
+.mk .d{display:block;width:14px;height:14px;border-radius:50%;background:var(--c);
+  box-shadow:0 0 0 2px #fff,0 1px 3px rgba(0,0,0,.35)}
+.mk .d.multi{box-shadow:0 0 0 2px #fff,0 0 0 4px var(--c),0 1px 3px rgba(0,0,0,.35)}
+/* Leaflet ships .leaflet-marker-pane img{width:auto}; match its specificity or the
+   photo is sized to its natural aspect ratio instead of a circle */
+.leaflet-marker-pane img.mi{display:block;width:40px;height:40px;border-radius:50%;
   object-fit:cover;background:#fff;border:3px solid var(--c);
-  box-shadow:0 1px 4px rgba(0,0,0,.45)}
-.pin.sel .thumb{border-color:var(--ink)}
-/* plain dot: fallback when there's no photo, and the whole map in dots mode */
-.dot{display:block;width:13px;height:13px;border-radius:50%;background:var(--c);
-  border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)}
-.dot.multi{width:17px;height:17px;box-shadow:0 0 0 2px var(--c),0 1px 3px rgba(0,0,0,.4)}
-/* "+2 more species here" */
-.cnt{position:absolute;right:-5px;bottom:-3px;background:var(--ink);color:var(--bg);
-  font-size:9.5px;font-weight:700;font-style:normal;line-height:1;padding:2px 4px;
-  border-radius:999px;border:1.5px solid var(--bg)}
-.lthumb{width:26px;height:26px;border-radius:50%;object-fit:cover;flex:none;
-  border:2px solid var(--c);background:var(--line)}
+  box-shadow:0 0 0 2px #fff,0 2px 6px rgba(0,0,0,.3)}
+.mk .plus{position:absolute;right:-6px;bottom:-4px;min-width:18px;height:18px;padding:0 4px;
+  border-radius:999px;background:#15171c;color:#fff;font:700 10.5px/18px var(--font);
+  text-align:center;box-shadow:0 0 0 2px #fff}
+.pin:hover .mk,.pin.hl .mk{transform:translate(-50%,-50%) scale(1.18)}
+.pin.sel .mk{transform:translate(-50%,-50%) scale(1.28)}
+.pin.sel img.mi{box-shadow:0 0 0 2px #fff,0 0 0 5px #15171c,0 4px 12px rgba(0,0,0,.35)}
+.pin.sel .d{box-shadow:0 0 0 2px #fff,0 0 0 5px #15171c}
+.me{display:block;width:18px;height:18px;border-radius:50%;background:#1a6fe0;
+  transform:translate(-50%,-50%);box-shadow:0 0 0 3px #fff,0 0 0 9px rgba(26,111,224,.18),0 1px 4px rgba(0,0,0,.3)}
+.leaflet-tooltip{font:13px/1.35 var(--font);border:0;border-radius:10px;padding:6px 10px;
+  box-shadow:0 6px 18px rgba(0,0,0,.18);color:#15171c}
+.leaflet-tooltip-top::before{display:none}
+.leaflet-tooltip small{color:#878c98}
+.leaflet-control-zoom{border:0!important;box-shadow:var(--shadow)!important;border-radius:12px!important;overflow:hidden}
+.leaflet-control-zoom a{width:36px!important;height:36px!important;line-height:36px!important;
+  border:0!important;color:#15171c!important}
+.leaflet-control-attribution{border-radius:8px 0 0 0;font-size:10.5px}
 
-/* route panel */
-.route{padding:.7rem .85rem;border-bottom:1px solid var(--line);background:var(--accent-soft)}
-.route .rt{display:flex;align-items:baseline;gap:.5rem}
-.route .rt .nm{font-weight:600;font-size:.92rem;flex:1;line-height:1.3}
-.route .sum{font-size:.85rem;color:var(--ink2);margin-top:.2rem}
-.route .sum b{color:var(--ink);font-size:.95rem}
-.steps{margin:.5rem 0 0;padding:.4rem 0 0;list-style:none;max-height:200px;overflow-y:auto;
-  overflow-x:hidden;border-top:1px solid var(--line);font-size:.83rem}
-.steps li{display:flex;gap:.5rem;padding:.22rem 0;line-height:1.35;color:var(--ink2)}
-.steps .d{color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap;flex:none}
-.steps .t{flex:1}
+.toast{position:fixed;left:50%;top:16px;transform:translate(-50%,-80px);z-index:2000;
+  background:var(--sel);color:var(--sel-ink);padding:10px 16px;border-radius:999px;font-size:14px;
+  box-shadow:var(--shadow);transition:transform .25s;pointer-events:none;white-space:nowrap}
+.toast.on{transform:translate(-50%,0)}
 
-/* species view: one clear section per bird */
-.spgroup{border-bottom:2px solid var(--line)}
-.sphead{position:sticky;top:var(--rh,0px);z-index:4;display:flex;align-items:center;
-  gap:.55rem;padding:.5rem .85rem;background:var(--panel);
-  border-bottom:1px solid var(--line);box-shadow:inset 4px 0 0 var(--c)}
-.sphead .nm{flex:1;font-weight:700;font-size:.92rem;line-height:1.3}
-.sphead .ct{font-size:.78rem;color:var(--dim);white-space:nowrap}
-.shthumb{width:28px;height:28px;border-radius:50%;object-fit:cover;flex:none;
-  border:2px solid var(--c);background:var(--line)}
-.site.sub{padding-left:1.15rem}
-
-.site{padding:.8rem .85rem;border-bottom:1px solid var(--line);cursor:pointer}
-.site:hover{background:var(--accent-soft)}
-.site.hl{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
-.site .nm{font-weight:600;font-size:.94rem;line-height:1.35;margin-bottom:.3rem}
-.site .meta{color:var(--dim);font-size:.8rem;
-  display:flex;gap:.45rem;flex-wrap:wrap;align-items:center}
-.site .drive{font-weight:600;color:var(--ink);font-size:.86rem}
-/* the species list is the detail layer — set it off from the heading above */
-.spp{margin:.5rem 0 0;padding:.15rem 0 0;list-style:none;font-size:.86rem;
-  border-top:1px solid var(--line)}
-.spp li{display:flex;gap:.5rem;align-items:baseline;padding:.22rem 0;line-height:1.35}
-.spp .sw{position:relative;top:1px}
-.spp .w{flex:1;color:var(--dim)}
-.spp .w b{color:var(--ink);font-weight:600;display:block}
-.badge{font-size:.65rem;text-transform:uppercase;letter-spacing:.04em;padding:.05rem .3rem;
-  border-radius:4px;background:var(--line);color:var(--ink2)}
-.badge.unc{background:transparent;color:var(--warn);border:1px solid currentColor}
-.spp .sub{display:block;font-size:.79rem;color:var(--dim);margin-top:.05rem}
-.spp .n{font-weight:500;color:var(--ink2)}
-.hours{display:flex;gap:1px;margin-top:.55rem;height:11px;align-items:flex-end}
-.hours i{width:3px;background:var(--line);border-radius:1px;height:3px}
-.hours i.on{background:var(--accent);height:11px}
-.links{margin-top:.5rem;font-size:.82rem;display:flex;gap:.9rem}
-.empty{padding:2rem .9rem;text-align:center;color:var(--dim)}
-.leaflet-popup-content{margin:.6rem .75rem;font:inherit;font-size:.87rem}
-.leaflet-popup-content .pt{font-weight:700;margin-bottom:.3rem}
-.leaflet-popup-content ul{margin:.3rem 0;padding:0;list-style:none}
-.leaflet-popup-content li{display:flex;gap:.4rem;align-items:center;padding:.05rem 0}
+/* ---- phones: map fills the screen, panel becomes a bottom sheet ---- */
+@media (max-width:760px){
+  .panel{top:auto;left:0;right:0;bottom:0;width:auto;height:var(--sheet);border-radius:20px 20px 0 0;
+    padding-bottom:env(safe-area-inset-bottom);transition:height .28s cubic-bezier(.2,.8,.2,1)}
+  .panel.dragging{transition:none}
+  .grab{display:flex;justify-content:center;align-items:center;height:22px;flex:none;
+    cursor:grab;touch-action:none}
+  .grab span{width:40px;height:5px;border-radius:3px;background:var(--line)}
+  .top{padding-top:2px}
+  .ph{display:none}                       /* location lives in options; saves a row */
+  .optm{display:grid}
+  .top{gap:8px}
+  .leaflet-control-zoom{display:none}
+  .leaflet-bottom{bottom:var(--sheet);transition:bottom .28s}
+}
 </style>
 </head>
 <body>
+<div id="map"></div>
 
-<header>
-  <h1>birdfinder</h1>
-  <span class="sub" id="loclabel">no location set</span>
-  <button class="linkbtn" id="btnSettings">settings</button>
-</header>
-
-<div class="wrap">
-<aside class="controls">
-
-  <section class="card" id="setup" style="display:none">
-    <h2>Setup</h2>
-    <div class="row">
-      <label for="token">API token</label>
-      <input id="token" type="password" placeholder="eBird API key" style="flex:1">
+<aside class="panel" id="panel">
+  <div class="grab" id="grab"><span></span></div>
+  <div class="top">
+    <div class="ph">
+      <div class="brand" id="brand"></div>
+      <button class="pill" id="locBtn"></button>
+      <button class="icon" id="optBtn" aria-label="Options" title="Options"></button>
     </div>
-    <p class="note">Paste your key once. It's saved in this browser only —
-      <a href="https://ebird.org/api/keygen" target="_blank" rel="noopener">get one</a>.</p>
-    <div class="row" style="margin-top:.7rem">
-      <label>Location</label>
-      <button class="linkbtn" id="btnGeo">use my location</button>
-      <button class="linkbtn" id="btnPick">click map</button>
-    </div>
-    <div class="row">
-      <label for="lat">lat, lng</label>
-      <input id="lat" placeholder="37.4275" style="flex:1;min-width:0">
-      <input id="lng" placeholder="-122.1697" style="flex:1;min-width:0">
-    </div>
-    <div class="checks">
-      <label><input type="radio" name="units" value="mi" checked> miles</label>
-      <label><input type="radio" name="units" value="km"> kilometers</label>
-    </div>
-    <div class="err" id="setupErr"></div>
-  </section>
-
-  <section class="card">
-    <h2>What to look for</h2>
-    <div class="searchbox">
-      <input id="q" placeholder="owls, raptors, Barn Owl, GHOW&hellip;" autocomplete="off">
+    <div class="search" id="searchBox">
+      <span id="searchIcon"></span>
+      <input id="q" placeholder="Search a bird or group" autocomplete="off" spellcheck="false">
+      <button class="icon optm" id="optBtnM" aria-label="Options"></button>
       <div class="sugg" id="sugg"></div>
     </div>
     <div class="chips" id="chips"></div>
-    <div class="quick" id="quick"></div>
-  </section>
-
-  <section class="card">
-    <h2>Where &amp; when</h2>
-    <div class="srow">
-      <div class="top"><label for="dist">Radius</label><output id="distOut"></output></div>
-      <input type="range" id="dist" min="2" max="50" value="25">
+    <div class="filters">
+      <div class="seg" id="distSeg"></div>
+      <div class="seg" id="daysSeg"></div>
     </div>
-    <div class="srow">
-      <div class="top"><label for="back">Days back</label><output id="backOut"></output></div>
-      <input type="range" id="back" min="1" max="30" value="14">
-    </div>
-    <div class="srow">
-      <div class="top"><label for="minSpp">Min species</label><output id="minSppOut"></output></div>
-      <input type="range" id="minSpp" min="1" max="6" value="1">
-    </div>
-    <div class="checks">
-      <label><input type="checkbox" id="hotOnly"> hotspots only</label>
-      <label><input type="checkbox" id="showUnc" checked> include unconfirmed</label>
-    </div>
-    <div class="checks" style="margin-top:.4rem">
-      <label><input type="checkbox" id="drive" checked> driving distance</label>
-      <label><input type="checkbox" id="photos" checked> photo pins</label>
-    </div>
-    <button id="go">Search</button>
-    <div class="prog" id="prog"><i></i></div>
-    <div class="err" id="err"></div>
-  </section>
-
-  <section class="card">
-    <h2>Also</h2>
-    <button class="linkbtn" id="btnNotable">show rarities near me</button>
-    <p class="note" id="taxoNote"></p>
-    <p class="note">Driving times via the OSRM demo server.</p>
-  </section>
-
-</aside>
-
-<main><div id="map"></div></main>
-
-<aside class="results">
-  <div class="rhead">
-    <div class="count" id="rcount">Pick a target and hit Search.</div>
-    <div class="rtools">
-      <div class="seg">
-        <button data-view="place" class="on">Places</button>
-        <button data-view="species">Species</button>
-      </div>
-      <select id="sort">
-        <option value="score">best bet</option>
-        <option value="drive">shortest drive</option>
-        <option value="dist">closest (direct)</option>
-        <option value="spp">most species</option>
-        <option value="recent">most recent</option>
-      </select>
-    </div>
+    <div class="prog"><i id="progBar"></i></div>
   </div>
-  <div id="route"></div>
-  <div id="legend"></div>
-  <div id="rlist"></div>
+  <div class="scroll" id="scroll">
+    <div class="opts" id="opts"></div>
+    <div class="banner" id="banner"></div>
+    <div id="body"></div>
+  </div>
 </aside>
-</div>
+<div class="toast" id="toast"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
@@ -326,22 +297,29 @@ input[type=range]{display:block;width:100%;min-width:0;accent-color:var(--accent
 const API = "https://api.ebird.org/v2";
 const OSRM = "https://router.project-osrm.org/table/v1/driving/";
 const OSRM_ROUTE = "https://router.project-osrm.org/route/v1/driving/";
-// Personal eBird token, hardcoded at the owner's request (single-user local app).
-// Read-only key, but strip this line if this file is ever shared.
-const DEFAULT_TOKEN = "";   // public copy: key is entered in settings
-
 const WIKI = "https://en.wikipedia.org/api/rest_v1/page/summary/";
-const LS = {token:"bf.token", home:"bf.home", units:"bf.units",
-            taxo:"bf.taxo", taxoAt:"bf.taxoAt", targets:"bf.targets", img:"bf.img2"};
+// Personal eBird token, hardcoded at the owner's request (single-user local app).
+// make_site.sh blanks this line for the public GitHub Pages copy.
+const DEFAULT_TOKEN = "";   // public copy: key is entered in options
+
+const LS = {token:"bf.token", home:"bf.home", units:"bf.units", taxo:"bf.taxo", taxoAt:"bf.taxoAt",
+            targets:"bf.targets", img:"bf.img2", dist:"bf.dist", back:"bf.back", opts:"bf.opts",
+            mode:"bf.mode"};
 const TAXO_MAX_AGE = 30*864e5;
 
-/* Categorical palette — dataviz reference slots, validated all-pairs against the
-   map surface (#f2efe9): normal-vision ΔE 15.6, CVD 6.9. That CVD figure sits in
-   the band that is only legal with secondary encoding, which is why every marker
-   carries its 4-letter code as a direct label. Species past the 6th go neutral
-   and lean entirely on that label. */
-const SERIES = ["#2a78d6","#1baf7a","#eda100","#008300","#4a3aa7","#e34948"];
+/* Pin ring colours: dataviz reference hues, the largest set that validates
+   all-pairs on the muted OSM basemap (#f3f1ed): normal-vision ΔE 15.6, CVD 6.9.
+   That CVD band is legal only with secondary encoding, which the bird photo and the
+   written name provide. The map stays light in dark mode because no 4+ hue set passes
+   all-pairs on both basemaps. Species past the 5th go neutral grey. */
+const SERIES = ["#2a78d6","#1baf7a","#eda100","#008300","#e34948"];
 const NEUTRAL = "#898781";
+// A photo pin needs this much room (px between centres). Pins are ranked and each gets
+// a photo only if it has the room; the rest stay dots. Zooming in frees up room.
+const PHOTO_SPACING = 46;
+
+const DIST = {mi:[5,10,20,30], km:[5,15,30,50]};      // eBird caps the radius at 50 km
+const DAYS = [3,7,14,30];                              // ...and history at 30 days
 
 const ALIASES = {
   "raptor":{orders:["Accipitriformes","Falconiformes","Strigiformes","Cathartiformes"]},
@@ -366,50 +344,134 @@ const ALIASES = {
   "woodpecker":{families:["Picidae"]},
   "vulture":{families:["Cathartidae","Accipitridae"]}
 };
-const QUICK = ["owls","raptors","warblers","shorebirds","waterfowl","hummingbirds",
-               "woodpeckers","sparrows","herons","gulls"];
+const QUICK = ["owls","raptors","hummingbirds","woodpeckers","waterfowl","shorebirds",
+               "warblers","sparrows","herons","gulls"];
 
-let TAXO = [], SCI = new Map();        // speciesCode -> scientific name
-let IMG = new Map();                   // speciesCode -> photo URL ("" = none found)
-let targets = [], sites = [], colorOf = new Map(), hidden = new Set();
-let map, layer, homeMarker, homeRing, markers = {}, picking = false;
-let routeLayer = null, routeFor = null;
-let view = "place", lastLabel = "Results", selected = null;
+/* ---------- icons (Lucide, ISC) -------------------------------------------- */
+const P = {
+  bird:'<path d="M16 7h.01"/><path d="M3.4 18H12a8 8 0 0 0 8-8V7a4 4 0 0 0-7.28-2.3L2 20"/><path d="m20 7 2 .5-2 .5"/><path d="M10 18v3"/><path d="M14 17.75V21"/><path d="M7 18a6 6 0 0 0 3.84-10.61"/>',
+  search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  pin:'<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
+  sliders:'<line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/>',
+  back:'<path d="m15 18-6-6 6-6"/>',
+  car:'<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/>',
+  ext:'<path d="M7 7h10v10"/><path d="M7 17 17 7"/>',
+  star:'<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>',
+  x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  clock:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  up:'<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>',
+  flag:'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>',
+  uturn:'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+  locate:'<line x1="2" x2="5" y1="12" y2="12"/><line x1="19" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="5"/><line x1="12" x2="12" y1="19" y2="22"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/>'
+};
+const I = (p,s=18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[p]}</svg>`;
+
+/* ---------- state ----------------------------------------------------------- */
+let TAXO = [], SCI = new Map(), IMG = new Map();
+let targets = [], notable = false, sites = [], lastObs = [], lastLabel = "";
+let colorOf = new Map(), focus = null, sort = "score", view = "list", group = "place";
+let current = null, routeState = null, searched = false;
+let map, layer, routeLayer = null, homeMarker = null, markers = {};
+let picking = false, pendingFit = false, seq = 0, schedT = null;
 
 const $ = s => document.querySelector(s);
-const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const cap = s => String(s).replace(/^./, c => c.toUpperCase());
+const isMobile = () => matchMedia("(max-width:760px)").matches;
+const canHover = () => matchMedia("(hover:hover)").matches;
+const jget = (k,d) => { try{ const v = JSON.parse(localStorage.getItem(k)); return v ?? d; }catch(e){ return d; } };
+const jset = (k,v) => { try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} };
+
 const store = {
   get token(){ return localStorage.getItem(LS.token) || DEFAULT_TOKEN; },
   set token(v){ v ? localStorage.setItem(LS.token,v) : localStorage.removeItem(LS.token); },
-  get home(){ try{ return JSON.parse(localStorage.getItem(LS.home)); }catch(e){ return null; } },
-  set home(v){ localStorage.setItem(LS.home, JSON.stringify(v)); },
+  get home(){ return jget(LS.home, null); },
+  set home(v){ jset(LS.home, v); },
   get units(){ return localStorage.getItem(LS.units) || "mi"; },
-  set units(v){ localStorage.setItem(LS.units,v); }
+  set units(v){ localStorage.setItem(LS.units, v); }
 };
+const prefs = { dist: jget(LS.dist, 32.2), back: jget(LS.back, 14) };          // dist in km
+const opts = Object.assign({hotspots:false, unconfirmed:true, photos:true, drive:true, minSpp:1},
+                           jget(LS.opts, {}));
 
-/* ---------- helpers -------------------------------------------------------- */
+/* ---------- formatting ------------------------------------------------------ */
 const fmtDist = km => store.units==="mi" ? (km*0.621371).toFixed(1)+" mi" : km.toFixed(1)+" km";
 function fmtMin(m){
   if(m==null) return null;
   const r = Math.round(m);
-  return r < 60 ? r+" min" : Math.floor(r/60)+"h "+(r%60)+"m";
+  return r < 60 ? r+" min" : Math.floor(r/60)+" h "+(r%60)+" min";
 }
 function haversine(a,b,c,d){
-  const R=6371,p1=a*Math.PI/180,p2=c*Math.PI/180,dp=p2-p1,dl=(d-b)*Math.PI/180;
+  const R=6371, p1=a*Math.PI/180, p2=c*Math.PI/180, dp=p2-p1, dl=(d-b)*Math.PI/180;
   const x=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
   return 2*R*Math.asin(Math.sqrt(x));
 }
 function parseObsDt(s){
-  if(!s) return {dt:null,hasTime:false};
-  const m=/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/.exec(s);
-  if(!m) return {dt:null,hasTime:false};
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/.exec(s||"");
+  if(!m) return {dt:null, hasTime:false};
   return {dt:new Date(+m[1],+m[2]-1,+m[3],+(m[4]||0),+(m[5]||0)), hasTime:m[4]!==undefined};
 }
-const ago = dt => { if(!dt) return "?";
-  const d=Math.floor((Date.now()-dt.getTime())/864e5);
-  return d<=0?"today":d===1?"yesterday":d+"d ago"; };
+function daysAgo(dt){                       // calendar days, not 24-hour blocks
+  if(!dt) return null;
+  const t = new Date(); t.setHours(0,0,0,0);
+  return Math.round((t - new Date(dt.getFullYear(),dt.getMonth(),dt.getDate()))/864e5);
+}
+function shortAgo(dt){
+  const d = daysAgo(dt);
+  return d==null ? "–" : d<=0 ? "Today" : d===1 ? "Yesterday" : d+" days ago";
+}
+function whenText(dt, hasTime){
+  if(!dt) return "";
+  const d = daysAgo(dt);
+  const t = hasTime ? " "+dt.toLocaleTimeString([], {hour:"numeric", minute:"2-digit"}) : "";
+  if(d<=0) return "Today"+t;
+  if(d===1) return "Yesterday"+t;
+  if(d<7) return dt.toLocaleDateString([], {weekday:"long"})+t;
+  return dt.toLocaleDateString([], {month:"short", day:"numeric"})+t;
+}
+const lastSeen = dt => daysAgo(dt)<=0 ? `<span class="fresh">Today</span>` : esc(shortAgo(dt));
+const joinWords = a => a.length<2 ? (a[0]||"") : a.slice(0,-1).join(", ")+" and "+a[a.length-1];
+
+const STATES = ["Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut",
+  "Delaware","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa","Kansas","Kentucky",
+  "Louisiana","Maine","Maryland","Massachusetts","Michigan","Minnesota","Mississippi","Missouri",
+  "Montana","Nebraska","Nevada","New Hampshire","New Jersey","New Mexico","New York",
+  "North Carolina","North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Rhode Island",
+  "South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont","Virginia","Washington",
+  "West Virginia","Wisconsin","Wyoming"];
+const STATE_RE = new RegExp(",\\s*(" + STATES.join("|") + ")$", "i");
+// eBird names: "Coyote Hills Regional Park--Visitor Center area",
+// "416 Escondido Road, Stanford, California, US (37.427, -122.171)", "Half Moon Bay US-CA (…)"
+function cleanName(raw){
+  let s = String(raw||"").trim()
+    .replace(/\s*\(\s*-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?\s*\)\s*$/, "")
+    .replace(/\s+US-[A-Z]{2}\b/g, "")
+    .replace(/,\s*(US|USA|United States)$/i, "").trim();
+  let [title, ...rest] = s.split(/\s*--\s*/);
+  let sub = rest.join(" · ");
+  if(!sub && title.includes(",")){
+    const parts = title.split(/\s*,\s*/);
+    title = parts.shift(); sub = parts.join(", ");
+  }
+  sub = sub.replace(STATE_RE, "");
+  if(STATES.includes(sub)) sub = "";
+  return {title: title || String(raw||""), sub};
+}
+const HOUR_BANDS = [[4,8,"early morning"],[8,11,"morning"],[11,15,"midday"],
+                    [15,18,"afternoon"],[18,21,"evening"],[21,28,"night"]];
+function hoursPhrase(hours){
+  const hit = new Set();
+  for(const h of hours){
+    const hh = h<4 ? h+24 : h;
+    const b = HOUR_BANDS.find(([a,z]) => hh>=a && hh<z);
+    if(b) hit.add(b[2]);
+  }
+  return joinWords(HOUR_BANDS.map(b=>b[2]).filter(n=>hit.has(n)));
+}
+
+/* ---------- text matching -------------------------------------------------- */
 function tokens(str){
-  const out=new Set();
+  const out = new Set();
   for(const w of String(str||"").toLowerCase().split(/[^a-z]+/)){
     if(!w) continue; out.add(w);
     if(w.endsWith("ies")&&w.length>4) out.add(w.slice(0,-3)+"y");
@@ -418,68 +480,48 @@ function tokens(str){
   }
   return out;
 }
-const inter=(a,b)=>{ for(const x of a) if(b.has(x)) return true; return false; };
+const inter = (a,b) => { for(const x of a) if(b.has(x)) return true; return false; };
 const singular = w => w.endsWith("s")&&w.length>3 ? w.slice(0,-1) : w;
 const hasAllWords = (name,words) => { const nt=tokens(name);
   return words.every(w=>nt.has(w)||nt.has(singular(w))); };
 
-// white or near-black text, whichever reads on this fill
-function inkOn(hex){
-  const n = parseInt(hex.slice(1),16);
-  const f = v => { v/=255; return v<=.03928 ? v/12.92 : ((v+.055)/1.055)**2.4; };
-  const L = .2126*f(n>>16&255) + .7152*f(n>>8&255) + .0722*f(n&255);
-  return (1.05)/(L+.05) > 4.5 ? "#fff" : "#0b0b0b";
-}
-
-/* ---------- API ------------------------------------------------------------ */
+/* ---------- eBird API ------------------------------------------------------- */
+const memo = new Map();                     // re-toggling a filter shouldn't refetch
 async function api(path, params, needKey=true){
   const url = new URL(API+path);
   for(const [k,v] of Object.entries(params||{})) if(v!=null) url.searchParams.set(k,v);
+  const key = url.toString(), hit = memo.get(key);
+  if(hit && Date.now()-hit.t < 5*60e3) return hit.d;
   const headers = {};
   if(needKey){
-    if(!store.token) throw new Error("No API token set — open settings.");
+    if(!store.token) throw new Error("Add your eBird key in options.");
     headers["X-eBirdApiToken"] = store.token;
   }
-  const r = await fetch(url,{headers});
-  if(r.status===403) throw new Error("eBird rejected the API token (403).");
+  const r = await fetch(url, {headers});
+  if(r.status===403) throw new Error("eBird didn't accept your API key. Check it in options.");
   if(r.status===404) return [];
-  if(!r.ok) throw new Error("eBird API error "+r.status);
-  return r.json();
+  if(!r.ok) throw new Error("eBird isn't responding right now ("+r.status+"). Try again shortly.");
+  const d = await r.json();
+  if(needKey) memo.set(key, {t:Date.now(), d});
+  return d;
 }
 
-/* ---------- taxonomy ------------------------------------------------------- */
-const note = m => $("#taxoNote").textContent = m;
 async function loadTaxonomy(){
   const at = +localStorage.getItem(LS.taxoAt)||0, cached = localStorage.getItem(LS.taxo);
   if(cached && Date.now()-at < TAXO_MAX_AGE){
-    try{ TAXO = JSON.parse(cached); indexSci();
-         note(`${TAXO.length.toLocaleString()} species cached`); return; }catch(e){}
+    try{ TAXO = JSON.parse(cached); indexSci(); return; }catch(e){}
   }
-  note("downloading eBird taxonomy (~3 MB, one time)…");
-  const raw = await api("/ref/taxonomy/ebird",{fmt:"json",cat:"species",locale:"en"},false);
-  TAXO = raw.map(r=>[r.speciesCode,r.comName,r.sciName,r.familyComName||"",
-                     r.familySciName||"",r.order||"",(r.bandingCodes||[])[0]||""]);
-  try{ localStorage.setItem(LS.taxo,JSON.stringify(TAXO));
-       localStorage.setItem(LS.taxoAt,Date.now()); }catch(e){}
+  const raw = await api("/ref/taxonomy/ebird", {fmt:"json", cat:"species", locale:"en"}, false);
+  TAXO = raw.map(r=>[r.speciesCode, r.comName, r.sciName, r.familyComName||"",
+                     r.familySciName||"", r.order||"", (r.bandingCodes||[])[0]||""]);
+  try{ localStorage.setItem(LS.taxo, JSON.stringify(TAXO));
+       localStorage.setItem(LS.taxoAt, Date.now()); }catch(e){}
   indexSci();
-  note(`${TAXO.length.toLocaleString()} species loaded`);
 }
-function indexSci(){
-  SCI = new Map();
-  for(const r of TAXO) SCI.set(r[0], r[2]);
-}
+function indexSci(){ SCI = new Map(); for(const r of TAXO) SCI.set(r[0], r[2]); }
 
-/* ---------- bird photos (Wikipedia REST, CORS-open) -------------------------
-   A search returns dozens of markers but only a handful of species, so this is
-   ~5 lookups, cached in localStorage forever after. Scientific name first: it's
-   unambiguous and Wikipedia redirects it to the right article. */
-function loadImgCache(){
-  try{ IMG = new Map(Object.entries(JSON.parse(localStorage.getItem(LS.img)||"{}"))); }
-  catch(e){ IMG = new Map(); }
-}
-function saveImgCache(){
-  try{ localStorage.setItem(LS.img, JSON.stringify(Object.fromEntries(IMG))); }catch(e){}
-}
+/* ---------- bird photos (Wikipedia REST) ------------------------------------- */
+function loadImgCache(){ IMG = new Map(Object.entries(jget(LS.img, {}))); }
 async function wikiThumb(sci, com){
   for(const title of [sci, com]){
     if(!title) continue;
@@ -488,35 +530,35 @@ async function wikiThumb(sci, com){
       if(!r.ok) continue;
       const d = await r.json();
       if(d.type === "disambiguation") continue;
-      // Use the API's URL verbatim. Rewriting the width (…/200px-…) 400s:
-      // Wikimedia only serves the thumbnail sizes it has generated.
+      // use verbatim: Wikimedia 400s on width rewrites it hasn't generated
       if(d.thumbnail?.source) return d.thumbnail.source;
-    }catch(e){ /* offline / blocked — fall through to the dot marker */ }
+    }catch(e){}
   }
   return "";
 }
 async function loadPhotos(codes, names){
   const missing = codes.filter(c => !IMG.has(c));
   if(!missing.length) return false;
-  await pooled(missing, async code => {
-    IMG.set(code, await wikiThumb(SCI.get(code), names.get(code)));
-  }, 4);
-  saveImgCache();
+  await pooled(missing, async c => IMG.set(c, await wikiThumb(SCI.get(c), names.get(c))), 4);
+  jset(LS.img, Object.fromEntries(IMG));
   return true;
 }
 const photoOf = code => IMG.get(code) || "";
+const colorFor = code => colorOf.get(code) || NEUTRAL;
+const face = (code, cls="") => {
+  const src = photoOf(code);
+  return src ? `<img ${cls} src="${esc(src)}" alt="" loading="lazy">` : `<span class="ph0"></span>`;
+};
 
-/* ---------- query resolution ----------------------------------------------- */
+/* ---------- query resolution ------------------------------------------------ */
 function resolve(qRaw){
   const q = qRaw.trim().toLowerCase().replace(/\s+/g," ");
   if(!q) return null;
   const qt = tokens(q), words = q.split(/[^a-z]+/).filter(Boolean);
   let hits = [], label = qRaw.trim(), detail = "";
-
   hits = TAXO.filter(r=>r[1].toLowerCase()===q||r[2].toLowerCase()===q||
                         r[6].toLowerCase()===q||r[0].toLowerCase()===q);
   if(hits.length) label = hits.length===1 ? hits[0][1] : qRaw.trim();
-
   if(!hits.length){
     const a = ALIASES[q] || ALIASES[q.replace(/s$/,"")];
     if(a){ const F=new Set(a.families||[]), O=new Set(a.orders||[]);
@@ -537,10 +579,7 @@ function resolve(qRaw){
     if(fams.size){
       hits = TAXO.filter(r=>fams.has(r[3]));
       const list = [...fams].sort();
-      // "warblers" spans 9 families; joining their names made a 182-char chip.
-      // Keep the label short and hang the full list off the tooltip instead.
-      label = list.length===1 ? list[0]
-                              : qRaw.trim().replace(/^./, ch=>ch.toUpperCase());
+      label = list.length===1 ? list[0] : cap(qRaw.trim());
       detail = list.join(", ");
     }
   }
@@ -548,37 +587,45 @@ function resolve(qRaw){
     hits = TAXO.filter(r=>inter(qt,tokens(r[1])));
     if(!hits.length) hits = TAXO.filter(r=>r[1].toLowerCase().includes(q));
   }
-  return hits.length ? {label,detail,q:qRaw.trim(),codes:hits.map(r=>r[0])} : null;
+  return hits.length ? {label:cap(label), detail, q:qRaw.trim(), codes:hits.map(r=>r[0])} : null;
 }
-
 function suggest(qRaw){
   const q = qRaw.trim().toLowerCase();
   if(q.length<2) return [];
   const qt = tokens(q), out = [];
   for(const name of Object.keys(ALIASES))
     if(name.startsWith(q) || name.replace(/s$/,"")===q.replace(/s$/,""))
-      out.push({type:"group",name,count:(resolve(name)||{codes:[]}).codes.length});
+      out.push({type:"group", name:cap(name)+"s", q:name, count:(resolve(name)||{codes:[]}).codes.length});
   const fams = new Map();
   for(const r of TAXO){ if(r[3] && inter(qt,tokens(r[3]))) fams.set(r[3],(fams.get(r[3])||0)+1); }
-  for(const [f,n] of [...fams].sort((a,b)=>b[1]-a[1]).slice(0,5))
-    out.push({type:"family",name:f,count:n});
+  for(const [f,n] of [...fams].sort((a,b)=>b[1]-a[1]).slice(0,4))
+    out.push({type:"family", name:f, q:f, count:n});
   const spp = [];
   for(const r of TAXO){
     const cn = r[1].toLowerCase();
-    if(r[6] && r[6].toLowerCase()===q) spp.push({type:"code",name:r[1],sub:r[6],rank:0});
-    else if(cn.startsWith(q)) spp.push({type:"species",name:r[1],sub:r[2],rank:1});
-    else if(cn.split(/[^a-z]+/).some(w=>w.startsWith(q)))
-      spp.push({type:"species",name:r[1],sub:r[2],rank:2});
+    if(r[6] && r[6].toLowerCase()===q) spp.push({type:"bird", name:r[1], q:r[1], rank:0});
+    else if(cn.startsWith(q)) spp.push({type:"bird", name:r[1], q:r[1], rank:1});
+    else if(cn.split(/[^a-z]+/).some(w=>w.startsWith(q))) spp.push({type:"bird", name:r[1], q:r[1], rank:2});
     if(spp.length>400) break;
   }
   spp.sort((a,b)=>a.rank-b.rank||a.name.localeCompare(b.name));
   return out.concat(spp.slice(0,8)).slice(0,12);
 }
 
-/* ---------- driving distance (OSRM table, one call per ~90 sites) ----------- */
+/* ---------- routing (OSRM) -------------------------------------------------- */
+async function pooled(items, worker, concurrency, onTick){
+  const res = []; let i = 0, done = 0;
+  await Promise.all(Array.from({length:Math.min(concurrency,items.length)}, async()=>{
+    while(i<items.length){
+      const idx = i++;
+      try{ res.push(await worker(items[idx])); }catch(e){}
+      onTick && onTick(++done, items.length);
+    }
+  }));
+  return res;
+}
 async function addDriveTimes(list, home){
-  const routable = list.filter(s=>s.lat!=null && s.lng!=null);
-  if(!routable.length) return false;
+  const routable = list.filter(s=>s.lat!=null && s.driveMin==null);
   let ok = false;
   for(let i=0;i<routable.length;i+=90){
     const chunk = routable.slice(i,i+90);
@@ -586,574 +633,706 @@ async function addDriveTimes(list, home){
       .map(c=>c[0].toFixed(5)+","+c[1].toFixed(5)).join(";");
     try{
       const r = await fetch(`${OSRM}${coords}?sources=0&annotations=distance,duration`);
-      if(!r.ok) continue;
-      const d = await r.json();
-      if(d.code!=="Ok") continue;
+      const d = r.ok ? await r.json() : null;
+      if(!d || d.code!=="Ok") continue;
       chunk.forEach((s,j)=>{
         const m = d.distances?.[0]?.[j+1], t = d.durations?.[0]?.[j+1];
         if(m!=null) s.driveKm = m/1000;
         if(t!=null) s.driveMin = t/60;
       });
       ok = true;
-    }catch(e){ /* offline or blocked — straight-line distances still shown */ }
+    }catch(e){}
   }
   return ok;
 }
-
-/* ---------- in-map driving route -------------------------------------------- */
 const COMPASS = ["north","northeast","east","southeast","south","southwest","west","northwest"];
 const compass = b => COMPASS[Math.round((((b||0)%360)+360)%360/45) % 8];
-
 function stepText(s){
   const m = s.maneuver, road = s.name || "", mod = m.modifier || "";
   switch(m.type){
-    // depart's modifier is a turn direction, which reads as nonsense ("Head left").
-    // The initial bearing gives a compass heading instead.
+    // depart's modifier is a turn direction ("Head left"); use the compass bearing
     case "depart":  return "Head " + compass(m.bearing_after) + (road ? " on " + road : "");
-    case "arrive":  return "Arrive at your destination";
-    case "roundabout": case "rotary":
-      return "Enter the roundabout" + (road ? " toward " + road : "");
-    case "exit roundabout": case "exit rotary":
-      return "Exit the roundabout" + (road ? " onto " + road : "");
-    case "merge":   return "Merge" + (mod ? " " + mod : "") + (road ? " onto " + road : "");
+    case "arrive":  return "Arrive";
+    case "roundabout": case "rotary": return "Enter the roundabout" + (road ? " toward " + road : "");
+    case "exit roundabout": case "exit rotary": return "Exit onto " + (road || "the road");
+    case "merge":   return "Merge" + (road ? " onto " + road : "");
     case "on ramp": return "Take the ramp" + (road ? " onto " + road : "");
     case "off ramp":return "Take the exit" + (road ? " toward " + road : "");
     case "fork":    return "Keep " + (mod || "straight") + (road ? " onto " + road : "");
     case "new name":return "Continue onto " + road;
-    case "continue":return "Continue" + (mod && mod !== "straight" ? " " + mod : "")
-                         + (road ? " on " + road : "");
+    case "continue":return "Continue" + (road ? " on " + road : "");
     default:        return "Turn " + mod + (road ? " onto " + road : "");
   }
 }
+function stepIcon(s){
+  const t = s.maneuver.type, m = s.maneuver.modifier || "";
+  if(t==="arrive") return I("flag",16);
+  if(t==="depart") return I("up",16);          // depart's modifier isn't a turn; see stepText
+  if(m==="uturn") return I("uturn",16);
+  const deg = {left:-90,"sharp left":-125,"slight left":-40,right:90,"sharp right":125,"slight right":40}[m] || 0;
+  return `<span style="display:inline-flex;transform:rotate(${deg}deg)">${I("up",16)}</span>`;
+}
 const stepDist = m => m < 1000 ? Math.round(m/10)*10 + " m"
   : (store.units==="mi" ? (m/1609.34).toFixed(1)+" mi" : (m/1000).toFixed(1)+" km");
+const gmapsDir = s => `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}`;
 
-function clearRoute(){
-  if(routeLayer){ map.removeLayer(routeLayer); routeLayer = null; }
-  routeFor = null;
-  $("#route").innerHTML = "";
+/* ---------- search ---------------------------------------------------------- */
+function setProg(p){
+  const b = $("#progBar");
+  b.style.opacity = p>=100 ? "0" : "1";
+  b.style.width = Math.min(p,100) + "%";
+  if(p>=100) setTimeout(()=>{ if(b.style.opacity==="0") b.style.width = "0"; }, 350);
 }
+const banner = m => $("#banner").textContent = m || "";
+function scheduleSearch(delay=250){ clearTimeout(schedT); schedT = setTimeout(search, delay); }
 
-async function showRoute(site){
-  const home = store.home;
-  if(!home || site.lat==null) return;
-  $("#route").innerHTML = `<div class="route"><div class="sum">Finding route…</div></div>`;
-  const from = `${home.lng.toFixed(5)},${home.lat.toFixed(5)}`;
-  const to   = `${site.lng.toFixed(5)},${site.lat.toFixed(5)}`;
-  let data;
-  try{
-    const r = await fetch(`${OSRM_ROUTE}${from};${to}?overview=full&geometries=geojson&steps=true`);
-    data = r.ok ? await r.json() : null;
-  }catch(e){ data = null; }
-
-  if(!data || data.code !== "Ok" || !data.routes?.length){
-    $("#route").innerHTML = `<div class="route">
-      <div class="rt"><span class="nm">${esc(site.name)}</span>
-        <button class="linkbtn" id="rtClose">close</button></div>
-      <div class="sum">Couldn't fetch a route. Use “open in Maps” instead.</div></div>`;
-    return;
+async function search(){
+  const my = ++seq, home = store.home;
+  goList(false);
+  banner("");
+  if(!store.token || !home || !TAXO.length){ renderPanel(); return; }
+  if(!notable && !targets.length){
+    sites = []; lastObs = []; searched = false; drawMap(); renderPanel(); return;
   }
-
-  const route = data.routes[0];
-  if(routeLayer) map.removeLayer(routeLayer);
-  const latlngs = route.geometry.coordinates.map(c => [c[1], c[0]]);   // GeoJSON is lng,lat
-  routeLayer = L.layerGroup([
-    L.polyline(latlngs, {color:"#fff", weight:8, opacity:.9}),          // casing
-    L.polyline(latlngs, {color:"#2a78d6", weight:4, opacity:1})
-  ]).addTo(map);
-  routeFor = site.locId;
-  map.fitBounds(L.latLngBounds(latlngs).pad(.12));
-
-  const steps = route.legs?.[0]?.steps || [];
-  $("#route").innerHTML = `<div class="route">
-    <div class="rt"><span class="nm">Route to ${esc(site.name)}</span>
-      <button class="linkbtn" id="rtClose">clear</button></div>
-    <div class="sum"><b>${fmtMin(route.duration/60)}</b> ·
-      ${fmtDist(route.distance/1000)} ·
-      <a href="https://www.google.com/maps/dir/?api=1&destination=${site.lat},${site.lng}"
-         target="_blank" rel="noopener">open in Maps</a></div>
-    <ul class="steps">${steps.map(s=>`<li><span class="d">${stepDist(s.distance)}</span>
-      <span class="t">${esc(stepText(s))}</span></li>`).join("")}</ul>
-  </div>`;
-}
-
-/* ---------- search --------------------------------------------------------- */
-async function pooled(items, worker, concurrency, onTick){
-  const res=[]; let i=0,done=0;
-  await Promise.all(Array.from({length:Math.min(concurrency,items.length)}, async()=>{
-    while(i<items.length){
-      const idx=i++;
-      try{ res.push(await worker(items[idx])); }catch(e){}
-      onTick && onTick(++done, items.length);
-    }
-  }));
-  return res;
-}
-const fail = m => $("#err").textContent = m || "";
-
-async function search(notableMode=false){
-  const home = store.home;
-  if(!home) return fail("Set a location first — settings › use my location, or click the map.");
-  if(!notableMode && !targets.length) return fail("Add at least one bird or group to look for.");
-
-  const dist=+$("#dist").value, back=+$("#back").value;
-  const common = {lat:home.lat.toFixed(4),lng:home.lng.toFixed(4),dist,back,includeProvisional:"true"};
-  if($("#hotOnly").checked) common.hotspot = "true";
-
-  $("#go").disabled = true; fail("");
-  const prog=$("#prog"), bar=prog.querySelector("i");
-  prog.classList.add("on"); bar.style.width="8%";
-
+  setProg(12);
   try{
-    let obs=[], label;
-    if(notableMode){
-      label = "Notable sightings";
-      obs = await api("/data/obs/geo/recent/notable",{...common,detail:"full"});
-      bar.style.width="60%";
+    const common = {lat:home.lat.toFixed(4), lng:home.lng.toFixed(4),
+                    dist:Math.round(prefs.dist), back:prefs.back, includeProvisional:"true"};
+    if(opts.hotspots) common.hotspot = "true";
+    let obs;
+    if(notable){
+      lastLabel = "Rare birds";
+      obs = await api("/data/obs/geo/recent/notable", {...common, detail:"full"});
     }else{
-      label = targets.map(t=>t.label).join(" · ");
+      lastLabel = targets.map(t=>t.label).join(" + ");
       const want = new Set(targets.flatMap(t=>t.codes));
+      // one cheap call says which of the targets are around at all
       const near = await api("/data/obs/geo/recent", common);
-      bar.style.width="25%";
+      if(my!==seq) return;
+      setProg(35);
       const present = [...new Set(near.map(r=>r.speciesCode))].filter(c=>want.has(c));
-      if(!present.length){
-        sites=[]; hidden.clear();
-        render(label, `Nothing from that group reported within ${fmtDist(dist)} in the last ${back} days. `+
-          `(${new Set(near.map(r=>r.speciesCode)).size} species were reported nearby overall.)`);
-        return;
-      }
-      const chunks = await pooled(present, c=>api("/data/obs/geo/recent/"+c, common), 6,
-        (d,t)=>bar.style.width=(25+55*d/t)+"%");
-      obs = chunks.flat();
+      const parts = await pooled(present, c=>api("/data/obs/geo/recent/"+c, common), 6,
+        (d,t)=>{ if(my===seq) setProg(35+45*d/t); });
+      obs = parts.flat();
     }
-    sites = buildSites(obs, home);
-    hidden.clear();
-    clearRoute();                                   // stale route from a prior search
-    assignColors();
-    pendingFit = true;                              // frame the new results once
-    render(label);                                  // paint immediately…
+    if(my!==seq) return;
+    lastObs = obs; focus = null; searched = true;
+    rebuild(true);
+    if(isMobile() && sheetState==="peek") setSheet("half");
 
-    // …then fill in drive times and bird photos, re-rendering as each lands
-    if($("#drive").checked && sites.length){
-      bar.style.width="80%";
-      const ok = await addDriveTimes(sites, home);
-      if(ok){ render(); }
-      else fail("Driving times unavailable right now — showing direct distance.");
-    }
-    if(sites.length){
-      bar.style.width="92%";
-      const names = new Map();
-      for(const s of sites) for(const r of s.list) names.set(r.code, r.name);
-      if(await loadPhotos([...names.keys()], names)) render();
-    }
-    bar.style.width="100%";
+    const names = new Map();
+    for(const s of sites) for(const r of s.list) names.set(r.code, r.name);
+    setProg(85);
+    await Promise.all([
+      opts.drive && sites.length
+        ? addDriveTimes(sites, home).then(ok=>{ if(my===seq && ok) renderPanel(); }) : null,
+      loadPhotos([...names.keys()], names).then(ch=>{ if(my===seq && ch){ renderPanel(); refreshIcons(true); } })
+    ]);
   }catch(e){
-    fail(e.message);
+    if(my===seq){ banner(e.message); renderPanel(); }
   }finally{
-    $("#go").disabled=false;
-    setTimeout(()=>{prog.classList.remove("on"); bar.style.width="0";},400);
+    if(my===seq) setProg(100);
   }
+}
+
+function rebuild(fit){
+  sites = buildSites(lastObs, store.home);
+  assignColors();
+  clearRoute();
+  pendingFit = fit;
+  renderPanel();
+  drawMap();
 }
 
 function buildSites(obs, home){
-  const showUnc = $("#showUnc").checked, by = new Map();
+  const by = new Map();
   for(const r of obs){
     if(!r || !r.locId) continue;
-    if(!showUnc && r.obsValid===false) continue;
+    if(!opts.unconfirmed && r.obsValid===false) continue;
     let s = by.get(r.locId);
-    if(!s){ s={locId:r.locId,name:r.locName||r.locId,lat:r.lat,lng:r.lng,
-               priv:!!r.locationPrivate,species:new Map()}; by.set(r.locId,s); }
-    const {dt,hasTime} = parseObsDt(r.obsDt);
+    if(!s){
+      s = {locId:r.locId, raw:r.locName||r.locId, lat:r.lat, lng:r.lng,
+           priv:!!r.locationPrivate, species:new Map(), ...cleanName(r.locName||r.locId)};
+      by.set(r.locId, s);
+    }
+    const {dt, hasTime} = parseObsDt(r.obsDt);
     const prev = s.species.get(r.speciesCode);
     if(!prev || (dt && prev.dt && dt>prev.dt))
-      s.species.set(r.speciesCode,{code:r.speciesCode,name:r.comName||r.speciesCode,
-        dt,hasTime,count:r.howMany,sub:r.subId,unc:r.obsValid===false});
+      s.species.set(r.speciesCode, {code:r.speciesCode, name:r.comName||r.speciesCode,
+        dt, hasTime, count:r.howMany, unc:r.obsValid===false});
   }
-  const out=[...by.values()];
+  const out = [...by.values()];
   for(const s of out){
-    s.list=[...s.species.values()].sort((a,b)=>(b.dt?.getTime()||0)-(a.dt?.getTime()||0));
-    s.n=s.list.length;
-    s.last=s.list.reduce((m,r)=>r.dt&&(!m||r.dt>m)?r.dt:m,null);
-    s.hours=s.list.filter(r=>r.hasTime&&r.dt).map(r=>r.dt.getHours());
-    s.distKm=(s.lat!=null)?haversine(home.lat,home.lng,s.lat,s.lng):Infinity;
+    s.list = [...s.species.values()].sort((a,b)=>(b.dt?.getTime()||0)-(a.dt?.getTime()||0));
+    s.n = s.list.length;
+    s.last = s.list.reduce((m,r)=>r.dt&&(!m||r.dt>m)?r.dt:m, null);
+    s.hours = s.list.filter(r=>r.hasTime&&r.dt).map(r=>r.dt.getHours());
+    s.distKm = s.lat!=null ? haversine(home.lat,home.lng,s.lat,s.lng) : Infinity;
   }
   return out;
 }
 function scoreOf(s){
   const days = s.last ? Math.max(0,(Date.now()-s.last.getTime())/864e5) : 99;
-  // drive time beats crow-flies distance for "is this worth the trip"
   const near = s.driveMin!=null ? 1/(1+s.driveMin/20) : 1/(1+s.distKm/15);
-  return s.n*2 + Math.exp(-days/7)*3 + near*1.5 + (s.priv?0:0.75);
+  return visible(s).length*2 + Math.exp(-days/7)*3 + near*1.5 + (s.priv?0:0.75);
 }
-
-/* colour assignment: by number of locations, so the commonest bird is slot 1.
-   Fixed per species for the life of a result set — filtering never repaints. */
+// colour by how many places each bird turned up in; fixed for the life of the result
+// set, so focusing one species never repaints the others
 function assignColors(){
   const tally = new Map();
   for(const s of sites) for(const r of s.list) tally.set(r.code,(tally.get(r.code)||0)+1);
   colorOf = new Map();
   [...tally.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]))
-    .forEach(([code],i)=> colorOf.set(code, i<SERIES.length ? SERIES[i] : NEUTRAL));
+    .forEach(([code],i)=>colorOf.set(code, i<SERIES.length ? SERIES[i] : NEUTRAL));
 }
-
-/* ---------- rendering ------------------------------------------------------ */
-function visibleList(s){ return s.list.filter(r=>!hidden.has(r.code)); }
-function sortSites(arr){
-  const k=$("#sort").value;
-  const cmp={ score:(a,b)=>scoreOf(b)-scoreOf(a),
-    drive:(a,b)=>(a.driveMin??a.distKm*2+999)-(b.driveMin??b.distKm*2+999),
-    dist:(a,b)=>a.distKm-b.distKm,
-    spp:(a,b)=>b.n-a.n||scoreOf(b)-scoreOf(a),
-    recent:(a,b)=>(b.last?.getTime()||0)-(a.last?.getTime()||0)}[k];
-  return [...arr].sort(cmp);
+const visible = s => focus ? s.list.filter(r=>r.code===focus) : s.list;
+function shownSites(){
+  const arr = sites.filter(s=>visible(s).length && visible(s).length>=opts.minSpp);
+  const est = s => s.driveMin ?? s.distKm*1.5;
+  const cmp = {score:(a,b)=>scoreOf(b)-scoreOf(a), drive:(a,b)=>est(a)-est(b),
+    spp:(a,b)=>visible(b).length-visible(a).length||scoreOf(b)-scoreOf(a),
+    recent:(a,b)=>(b.last?.getTime()||0)-(a.last?.getTime()||0)}[sort];
+  return arr.sort(cmp);
 }
-// lists and the legend already spell the name out, so colour alone is enough there
-const swatch = code => `<span class="sw" style="--c:${colorOf.get(code)||NEUTRAL}"></span>`;
+const siteBy = id => sites.find(s=>s.locId===id);
 
-function render(label, emptyMsg){
-  if(label) lastLabel = label;
-  const min=+$("#minSpp").value;
-  const shown = sortSites(sites.filter(s=>visibleList(s).length>=min));
-  const nSpp = new Set(shown.flatMap(s=>visibleList(s).map(r=>r.code))).size;
-  const dense = $("#photos").checked && shown.length > DENSE_PINS;
-  $("#rcount").textContent = shown.length
-    ? `${lastLabel} — ${nSpp} species at ${shown.length} location${shown.length===1?"":"s"}`
-      + (dense ? " · too many pins for photos, showing dots" : "")
-    : (emptyMsg || `${lastLabel} — nothing matched your filters.`);
-  renderLegend();
-  view==="place" ? renderPlaces(shown) : renderSpecies(shown);
-  drawMap(shown);
-  // species headers stick just below the (already sticky) results toolbar
-  const rh = document.querySelector(".rhead")?.offsetHeight || 0;
-  document.querySelector("aside.results").style.setProperty("--rh", rh + "px");
+/* ---------- panel rendering ------------------------------------------------- */
+function travel(s){
+  return s.driveMin!=null
+    ? `${I("car",15)}<b>${fmtMin(s.driveMin)}</b><span class="dim">${fmtDist(s.driveKm ?? s.distKm)}</span>`
+    : `<span>${fmtDist(s.distKm)} away</span>`;
 }
-
-function renderLegend(){
+function renderPanel(){
+  const body = $("#body"), sc = $("#scroll");
+  const keep = view==="list" ? sc.scrollTop : 0;
+  body.innerHTML = panelHTML();
+  if(view==="list") sc.scrollTop = keep;
+}
+function panelHTML(){
+  if(!store.token || !store.home) return onboardHTML();
+  if(!TAXO.length) return `<div class="empty"><p>Loading the bird list…</p></div>`;
+  if(view==="route" && routeState) return routeHTML();
+  if(view==="place"){ const s = siteBy(current); if(s) return placeHTML(s); view = "list"; }
+  return listHTML();
+}
+function onboardHTML(){
+  let h = `<div class="empty"><h3>Find birds near you</h3>
+    <p>Recent sightings from eBird, ranked by the best places to go.</p>`;
+  if(!store.token) h += `<div class="field"><input id="obKey" type="password" placeholder="Paste your eBird API key">
+      <div class="hint">Saved in this browser only. <a href="https://ebird.org/api/keygen" target="_blank" rel="noopener">Get a free key</a></div></div>
+      <div class="row"><button class="btn primary grow" data-act="saveKey">Save key</button></div>`;
+  if(!store.home) h += `<div class="row">
+      <button class="btn primary" data-act="geo">${I("locate",16)} Use my location</button>
+      <button class="btn" data-act="pick">${I("pin",16)} Pick on map</button></div>`;
+  return h + `</div>`;
+}
+function listHTML(){
+  if(!notable && !targets.length)
+    return `<div class="empty"><h3>What are you looking for?</h3>
+      <p>Pick a group above, or search for a bird.</p></div>`;
+  if(!searched) return `<div class="empty"><p>Searching…</p></div>`;
+  const shown = shownSites();
+  if(!sites.length){
+    const dl = fmtDist(prefs.dist).replace(/\.0 /," ");
+    let h = `<div class="empty"><h3>No ${esc(lastLabel.toLowerCase())} reported nearby</h3>
+      <p>Within ${dl} in the last ${prefs.back} days.</p><div class="row">`;
+    if(prefs.back<30) h += `<button class="btn" data-act="days30">Last 30 days</button>`;
+    const maxKm = DIST[store.units].slice(-1)[0]*(store.units==="mi"?1.609:1);
+    if(prefs.dist<maxKm-1) h += `<button class="btn" data-act="distMax">Search farther</button>`;
+    return h + `</div></div>`;
+  }
+  // species strip doubles as the colour key and the filter
   const tally = new Map();
   for(const s of sites) for(const r of s.list){
-    const t = tally.get(r.code) || {name:r.name, n:0};
-    t.n++; tally.set(r.code,t);
+    const t = tally.get(r.code) || {name:r.name, n:0}; t.n++; tally.set(r.code, t);
   }
-  if(!tally.size) return $("#legend").innerHTML = "";
-  const rows = [...tally.entries()].sort((a,b)=>b[1].n-a[1].n||a[1].name.localeCompare(b[1].name));
-  const anyHidden = hidden.size>0;
-  $("#legend").innerHTML =
-    `<h3>Species key
-       <button class="linkbtn" id="legAll">${anyHidden?"show all":"click to filter"}</button></h3>` +
-    `<div class="lwrap">` +
-    rows.map(([code,t])=>{
-      const src = photoOf(code);
-      const key = src
-        ? `<img class="lthumb" style="--c:${colorOf.get(code)||NEUTRAL}"
-                src="${esc(src)}" alt="">`
-        : swatch(code);
-      return `<div class="lrow ${hidden.has(code)?"off":""}" data-code="${esc(code)}">
-        ${key}<span class="nm">${esc(t.name)}</span>
-        <span class="ct">${t.n}</span>
-      </div>`;
-    }).join("") + `</div>`;
+  const birds = [...tally.entries()].sort((a,b)=>b[1].n-a[1].n);
+  let h = `<div class="sum"><div class="t">${shown.length} place${shown.length===1?"":"s"}
+      <small>· ${birds.length} bird${birds.length===1?"":"s"}</small></div>
+    <div class="seg sm" id="groupSeg">
+      <button data-group="place" class="${group==="place"?"on":""}">Places</button>
+      <button data-group="bird" class="${group==="bird"?"on":""}">Birds</button></div>
+    <select class="mini" id="sortSel" aria-label="Sort">
+      ${[["score","Best"],["drive","Nearest"],["recent","Newest"],["spp","Most birds"]]
+        .map(([v,l])=>`<option value="${v}"${sort===v?" selected":""}>${l}</option>`).join("")}
+    </select></div>`;
+  if(birds.length>1){
+    h += `<div class="birds"><button class="bird all ${focus?"":"on"}" data-focus="">All</button>` +
+      birds.map(([code,t])=>`<button class="bird ${focus===code?"on":""}" data-focus="${esc(code)}"
+          style="--c:${colorFor(code)}" title="${esc(t.name)}">${face(code)}
+          <span class="n">${esc(t.name)}</span><span class="ct">${t.n}</span></button>`).join("") +
+      `</div>`;
+  }
+  if(!shown.length) return h + `<div class="empty"><p>No places match these filters.</p></div>`;
+  return h + (group==="place" ? shown.map(cardHTML).join("") : byBirdHTML(shown));
 }
-
-function sppLine(r){
-  const cnt = r.count ? ` <span class="n">×${r.count}</span>` : "";
-  const unc = r.unc ? ' <span class="badge unc">unconfirmed</span>' : "";
-  const when = r.dt ? (r.hasTime
-    ? r.dt.toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})
-    : r.dt.toLocaleDateString(undefined,{month:"short",day:"numeric"})) : "?";
-  // name on its own line, the when/how-many detail beneath it
-  return `<li>${swatch(r.code)}<span class="w"><b>${esc(r.name)}${cnt}</b>` +
-         `<span class="sub">${when} · ${ago(r.dt)}${unc}</span></span></li>`;
+function cardHTML(s){
+  const vis = visible(s), lead = vis[0];
+  const plus = vis.length>1 ? `<span class="plus">+${vis.length-1}</span>` : "";
+  return `<div class="card" data-loc="${esc(s.locId)}">
+    <div class="tw" style="--c:${colorFor(lead.code)}">${face(lead.code)}${plus}</div>
+    <div class="main">
+      <div class="nm">${esc(s.title)}</div>
+      ${s.sub ? `<div class="sub">${esc(s.sub)}</div>` : ""}
+      <div class="meta">${travel(s)}<span class="sep"></span>${lastSeen(s.last)}</div>
+      <div class="spp">${esc(vis.map(r=>r.name).join(", "))}</div>
+    </div></div>`;
 }
-function driveMeta(s){
-  const t = fmtMin(s.driveMin);
-  return t ? `<span class="drive">${t} drive</span><span>${fmtDist(s.driveKm ?? s.distKm)}</span>`
-           : `<span class="drive">${fmtDist(s.distKm)}</span><span>direct</span>`;
-}
-
-function renderPlaces(arr){
-  if(!arr.length) return $("#rlist").innerHTML = `<div class="empty">No places to show.</div>`;
-  $("#rlist").innerHTML = arr.map(s=>{
-    const vis = visibleList(s);
-    return `<div class="site" data-loc="${esc(s.locId)}">
-      <div class="nm">${esc(s.name)}</div>
-      <div class="meta">${driveMeta(s)}
-        <span class="badge">${s.priv?"personal":"hotspot"}</span>
-        <span>${ago(s.last)}</span></div>
-      <ul class="spp">${vis.map(sppLine).join("")}</ul>
-      ${s.hours.length?`<div class="hours" title="hours reported">${
-        Array.from({length:24},(_,i)=>`<i class="${s.hours.includes(i)?"on":""}"></i>`).join("")}</div>`:""}
-      <div class="links">
-        <a href="#" data-route="${esc(s.locId)}">show route</a>
-        <a href="https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}"
-           target="_blank" rel="noopener">open in Maps</a>
-        ${s.priv?"":`<a href="https://ebird.org/hotspot/${esc(s.locId)}" target="_blank" rel="noopener">eBird</a>`}
-      </div></div>`;
+function byBirdHTML(shown){
+  const by = new Map();
+  for(const s of shown) for(const r of visible(s)){
+    if(!by.has(r.code)) by.set(r.code, {name:r.name, rows:[]});
+    by.get(r.code).rows.push({s, r});
+  }
+  return [...by.entries()].sort((a,b)=>b[1].rows.length-a[1].rows.length).map(([code,g])=>{
+    g.rows.sort((x,y)=>(y.r.dt?.getTime()||0)-(x.r.dt?.getTime()||0));
+    return `<div class="gh" style="--c:${colorFor(code)}">${face(code)}
+        <span class="n">${esc(g.name)}</span>
+        <span class="ct">${g.rows.length} place${g.rows.length===1?"":"s"}</span></div>` +
+      g.rows.map(({s,r})=>`<div class="gr" data-loc="${esc(s.locId)}">
+        <div class="nm">${esc(s.title)}</div>
+        <div class="meta">${travel(s)}<span class="sep"></span>${esc(whenText(r.dt, r.hasTime))}</div>
+      </div>`).join("");
   }).join("");
 }
-
-function renderSpecies(arr){
-  const bySpp = new Map();
-  for(const s of arr) for(const r of visibleList(s)){
-    if(!bySpp.has(r.code)) bySpp.set(r.code,{name:r.name,rows:[]});
-    bySpp.get(r.code).rows.push({s,r});
-  }
-  if(!bySpp.size) return $("#rlist").innerHTML = `<div class="empty">No species to show.</div>`;
-  // commonest bird first, and each species gets its own sticky header
-  $("#rlist").innerHTML = [...bySpp.entries()]
-    .sort((a,b)=>b[1].rows.length-a[1].rows.length || a[1].name.localeCompare(b[1].name))
-    .map(([code,g])=>{
-      g.rows.sort((x,y)=>(y.r.dt?.getTime()||0)-(x.r.dt?.getTime()||0));
-      const c = colorOf.get(code)||NEUTRAL, src = photoOf(code);
-      const key = src ? `<img class="shthumb" src="${esc(src)}" alt="">`
-                      : `<span class="sw" style="--c:${c}"></span>`;
-      return `<section class="spgroup" style="--c:${c}">
-        <header class="sphead">${key}
-          <span class="nm">${esc(g.name)}</span>
-          <span class="ct">${g.rows.length} place${g.rows.length===1?"":"s"}</span>
-        </header>
-        ${g.rows.map(({s,r})=>`
-          <div class="site sub" data-loc="${esc(s.locId)}">
-            <div class="nm">${esc(s.name)}</div>
-            <div class="meta">${driveMeta(s)}
-              <span class="badge">${s.priv?"personal":"hotspot"}</span>
-              <span>${ago(r.dt)}${r.count?` · ×${r.count}`:""}</span></div>
-          </div>`).join("")}
-      </section>`;
-    }).join("");
+function placeHTML(s){
+  const when = s.hours.length ? `<p class="note">${I("clock",16)}Usually reported ${hoursPhrase(s.hours)}</p>` : "";
+  return `<button class="back" data-act="list">${I("back",18)}<span>Results</span></button>
+    <div class="pt">${esc(s.title)}</div>
+    <div class="ps">${[s.sub, s.priv ? "Private location" : "Public hotspot"].filter(Boolean).map(esc).join(" · ")}</div>
+    <div class="actions">
+      <button class="btn primary grow" data-act="route">${I("car",16)} Directions</button>
+      <a class="btn" href="${gmapsDir(s)}" target="_blank" rel="noopener">Maps ${I("ext",15)}</a>
+      ${s.priv ? "" : `<a class="btn" href="https://ebird.org/hotspot/${esc(s.locId)}" target="_blank" rel="noopener">eBird ${I("ext",15)}</a>`}
+    </div>
+    <div class="stats">
+      <div class="stat"><b>${fmtMin(s.driveMin) || fmtDist(s.distKm)}</b><span>${s.driveMin!=null ? "drive" : "away"}</span></div>
+      <div class="stat"><b>${s.n}</b><span>${s.n===1 ? "bird" : "birds"} seen</span></div>
+      <div class="stat"><b>${esc(shortAgo(s.last))}</b><span>last report</span></div>
+    </div>
+    ${when}
+    <div class="sect">Birds seen here</div>
+    ${s.list.map(r=>`<div class="sp" style="--c:${colorFor(r.code)}">${face(r.code)}
+      <div class="main"><div class="nm">${esc(r.name)}${r.count ? ` <span class="dim">×${esc(r.count)}</span>` : ""}
+        ${r.unc ? `<span class="tag">unreviewed</span>` : ""}</div>
+        <div class="w">${esc(whenText(r.dt, r.hasTime))}</div></div></div>`).join("")}`;
+}
+function routeHTML(){
+  const s = siteBy(routeState.locId);
+  const head = `<button class="back" data-act="place">${I("back",18)}<span>${esc(s ? s.title : "Back")}</span></button>`;
+  if(routeState.loading) return head + `<div class="empty"><p>Finding a route…</p></div>`;
+  if(routeState.error || !s) return head + `<div class="empty"><p>Couldn't get a route right now.</p>
+    ${s ? `<div class="row"><a class="btn primary" href="${gmapsDir(s)}" target="_blank" rel="noopener">Open in Google Maps</a></div>` : ""}</div>`;
+  const r = routeState.route, steps = r.legs?.[0]?.steps || [];
+  return head + `<div class="rsum"><b>${fmtMin(r.duration/60)}</b><span>${fmtDist(r.distance/1000)}</span></div>
+    <div class="actions"><a class="btn primary grow" href="${gmapsDir(s)}" target="_blank" rel="noopener">
+      Open in Google Maps ${I("ext",15)}</a></div>
+    <ul class="steps">${steps.map(st=>`<li><span class="ic">${stepIcon(st)}</span>
+      <div class="main">${esc(stepText(st))}${st.distance>0 ? `<div class="d">${stepDist(st.distance)}</div>` : ""}</div></li>`).join("")}</ul>`;
 }
 
-/* ---------- map ------------------------------------------------------------ */
+/* ---------- options --------------------------------------------------------- */
+function renderOpts(){
+  const h = store.home;
+  $("#opts").innerHTML = `
+    <div><h4>Location</h4>
+      <div class="hint" style="margin:0 0 8px">${h ? esc(locLabel()) : "Not set"}</div>
+      <div class="row"><button class="btn" data-act="geo">${I("locate",16)} Use my location</button>
+        <button class="btn" data-act="pick">${I("pin",16)} Pick on map</button></div></div>
+    <div><h4>Show</h4>
+      <div style="display:flex;flex-direction:column;gap:12px">
+      ${[["photos","Bird photos on the map"],["drive","Drive times"],
+         ["hotspots","Public hotspots only"],["unconfirmed","Include unreviewed reports"]]
+        .map(([k,l])=>`<label class="sw">${l}<input type="checkbox" data-opt="${k}"${opts[k]?" checked":""}></label>`).join("")}
+      </div></div>
+    <div class="row" style="justify-content:space-between">
+      <div><h4>Units</h4><div class="seg sm" id="unitSeg">
+        ${["mi","km"].map(u=>`<button data-unit="${u}" class="${store.units===u?"on":""}">${u}</button>`).join("")}</div></div>
+      <div><h4>Birds per place</h4><div class="seg sm" id="minSeg">
+        ${[1,2,3].map(n=>`<button data-min="${n}" class="${opts.minSpp===n?"on":""}">${n}+</button>`).join("")}</div></div>
+    </div>
+    <div class="field"><h4>eBird API key</h4>
+      <input id="keyIn" type="password" placeholder="${DEFAULT_TOKEN ? "Using the built-in key" : "Paste your key"}"
+        value="${esc(localStorage.getItem(LS.token)||"")}">
+      <div class="hint">Saved in this browser only. <a href="https://ebird.org/api/keygen" target="_blank" rel="noopener">Get a free key</a></div></div>`;
+}
+function toggleOpts(force){
+  const o = $("#opts"), on = force ?? !o.classList.contains("on");
+  if(on) renderOpts();
+  o.classList.toggle("on", on);
+  $("#optBtn").classList.toggle("on", on);
+  $("#optBtnM").classList.toggle("on", on);
+  if(on){ $("#scroll").scrollTop = 0; if(isMobile() && sheetState!=="full") setSheet("full"); }
+}
+
+/* ---------- header controls ------------------------------------------------- */
+function locLabel(){
+  const h = store.home;
+  if(!h) return "Set location";
+  return h.name==="you" ? "Near you" : h.name==="map" ? "Pinned spot" : "Near " + h.name;
+}
+function renderHeader(){
+  $("#locBtn").innerHTML = I("pin",15) + `<span>${esc(locLabel())}</span>`;
+}
+function renderChips(){
+  const quick = new Set(QUICK);
+  const on = new Set(targets.map(t=>t.q.toLowerCase()));
+  let h = `<button class="chip ${notable?"on":""}" data-rare>${I("star",14)}Rare</button>`;
+  for(const t of targets) if(!quick.has(t.q.toLowerCase()))
+    h += `<button class="chip on" data-rm="${esc(t.q)}" title="${esc(t.detail || t.label)}">${esc(t.label)}
+          <span class="x">${I("x",14)}</span></button>`;
+  for(const q of QUICK) h += `<button class="chip ${!notable && on.has(q) ? "on" : ""}" data-q="${q}">${cap(q)}</button>`;
+  $("#chips").innerHTML = h;
+}
+function renderSegs(){
+  const u = store.units, kmPer = u==="mi" ? 1.609344 : 1;
+  const cur = DIST[u].reduce((b,v)=>Math.abs(v*kmPer-prefs.dist)<Math.abs(b*kmPer-prefs.dist)?v:b);
+  $("#distSeg").innerHTML = DIST[u].map(v=>`<button data-dist="${v}" class="${v===cur?"on":""}">${v} ${u}</button>`).join("");
+  $("#daysSeg").innerHTML = DAYS.map(v=>`<button data-days="${v}" class="${v===prefs.back?"on":""}">${v}d</button>`).join("");
+}
+function saveTargets(){
+  jset(LS.targets, targets.map(t=>t.q));
+  localStorage.setItem(LS.mode, notable ? "rare" : "targets");
+}
+function toggleTarget(q){
+  const i = targets.findIndex(t=>t.q.toLowerCase()===q.toLowerCase());
+  if(i>=0 && !notable) targets.splice(i,1);
+  else if(i<0){ const t = resolve(q); if(!t){ toast(`Nothing matched “${q}”`); return; } targets.push(t); }
+  notable = false;
+  saveTargets(); renderChips(); scheduleSearch();
+}
+
+/* ---------- map ------------------------------------------------------------- */
 function initMap(){
-  const h = store.home || {lat:37.4275,lng:-122.1697};
-  map = L.map("map",{zoomControl:true}).setView([h.lat,h.lng],11);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    {maxZoom:18,attribution:"&copy; OpenStreetMap"}).addTo(map);
+  const h = store.home || {lat:37.4275, lng:-122.1697};
+  map = L.map("map", {zoomControl:false, attributionControl:true}).setView([h.lat,h.lng], 11);
+  L.control.zoom({position:"topright"}).addTo(map);
+  // OpenStreetMap: keyless, and it shows parks and preserves, which matter for birding.
+  // (CARTO's cleaner style now serves "API key required" tiles.) Muted in CSS.
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom:19,
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(map);
   layer = L.layerGroup().addTo(map);
-  map.on("click", e=>{ if(!picking) return;
-    setHome(e.latlng.lat,e.latlng.lng,"map pin");
-    picking=false; map.getContainer().style.cursor=""; });
-  // Pills at close zoom, plain dots when everything would overlap. Only redraw
-  // when actually crossing that threshold — rebuilding every marker on every
-  // zoomend interrupts Leaflet's zoom animation and snaps the view back.
-  // Leaflet caches the container size; without this the map renders against
-  // stale dimensions after a window resize or a responsive breakpoint change.
-  let rsz;
-  addEventListener("resize", ()=>{
-    clearTimeout(rsz);
-    rsz = setTimeout(()=>map.invalidateSize({animate:false}), 150);
+  map.on("click", e=>{
+    if(!picking) return;
+    picking = false; map.getContainer().style.cursor = "";
+    setHome(e.latlng.lat, e.latlng.lng, "map");
+    toast("Location set");
   });
-
-  // Deliberately no zoomend redraw: markers look the same at every zoom now.
-  // Rebuilding the marker layer on zoomend used to interrupt Leaflet's zoom
-  // animation and snap the view back where it started.
+  // re-decide which pins have room for a photo once the map has settled
+  let mt;
+  map.on("moveend", ()=>{ clearTimeout(mt); mt = setTimeout(()=>refreshIcons(false), 80); });
+  let rt;
+  addEventListener("resize", ()=>{ clearTimeout(rt); rt = setTimeout(()=>{
+    map.invalidateSize({animate:false}); setSheet(sheetState); }, 150); });
 }
-// Above this many pins the photos tile over each other and the map is unreadable,
-// so they degrade to dots on their own. A broad search like "warblers + sparrows"
-// can return 400 locations.
-const DENSE_PINS = 120;
-const usePhotos = n => $("#photos").checked && n <= DENSE_PINS;
-let currentShown = [], pendingFit = false;
-
-function drawMap(arr){
-  currentShown = arr;
+function fitPad(){
+  const p = $("#panel");
+  return isMobile()
+    ? {paddingTopLeft:[24,24], paddingBottomRight:[24, p.offsetHeight+16]}
+    : {paddingTopLeft:[p.offsetWidth+40, 30], paddingBottomRight:[60, 30]};
+}
+function iconFor(s, mode){
+  const vis = visible(s), lead = vis[0], c = colorFor(lead.code), src = photoOf(lead.code);
+  const plus = vis.length>1 ? `<i class="plus">+${vis.length-1}</i>` : "";
+  const inner = mode==="photo" && src
+    ? `<img class="mi" src="${esc(src)}" alt="">${plus}`
+    : `<span class="d${vis.length>1 ? " multi" : ""}"></span>`;
+  return L.divIcon({className:"pin" + (s.locId===current ? " sel" : ""), iconSize:[0,0],
+                    html:`<span class="mk" style="--c:${c}">${inner}</span>`});
+}
+function refreshIcons(force){
+  const b = map.getBounds().pad(.1), placed = [], R2 = PHOTO_SPACING**2;
+  const ranked = Object.values(markers).sort((a,c)=>scoreOf(c.site)-scoreOf(a.site));
+  for(const m of ranked){
+    let want = "dot";
+    if(opts.photos && photoOf(visible(m.site)[0].code) && b.contains(m.getLatLng())){
+      const p = map.latLngToContainerPoint(m.getLatLng());
+      if(!placed.some(q=>(q.x-p.x)**2+(q.y-p.y)**2 < R2)){ placed.push(p); want = "photo"; }
+    }
+    if(force || m.mode!==want){
+      m.mode = want;
+      m.setIcon(iconFor(m.site, want));
+      m.setZIndexOffset(Math.round(scoreOf(m.site)*10) + (want==="photo" ? 1000 : 0));
+    }
+  }
+}
+function drawMap(){
   layer.clearLayers(); markers = {};
   const home = store.home;
   if(home){
-    // reuse the marker rather than remove/re-add — fewer layer mutations per redraw
-    if(!homeMarker){
-      homeMarker = L.circleMarker([home.lat,home.lng],{radius:6,color:"#0b0b0b",weight:2,
-        fillColor:"#fff",fillOpacity:1}).addTo(map).bindPopup("You are here");
-    }else homeMarker.setLatLng([home.lat,home.lng]);
-    L.circle([home.lat,home.lng],{radius:+$("#dist").value*1000,color:"#52514e",
-      weight:1,opacity:.3,fillOpacity:.03}).addTo(layer);
+    if(!homeMarker) homeMarker = L.marker([home.lat,home.lng], {interactive:false, keyboard:false,
+      icon:L.divIcon({className:"pin", iconSize:[0,0], html:'<span class="me"></span>'}), zIndexOffset:-1000}).addTo(map);
+    else homeMarker.setLatLng([home.lat,home.lng]);
+    L.circle([home.lat,home.lng], {radius:prefs.dist*1000, color:"#1a6fe0", weight:1.5, opacity:.35,
+      dashArray:"4 6", fillOpacity:.03, interactive:false}).addTo(layer);
   }
-  const photos = usePhotos(arr.length);
-  for(const s of arr){
+  const shown = shownSites();
+  for(const s of shown){
     if(s.lat==null) continue;
-    const vis = visibleList(s);
-    if(!vis.length) continue;
-    const lead = vis[0];                                  // most recent species here
-    const c = colorOf.get(lead.code) || NEUTRAL;
-    const src = photos ? photoOf(lead.code) : "";
-    const inner = src
-      // no loading="lazy" here: Leaflet's icon container is 0x0, so a lazy image
-      // never counts as on-screen and silently never loads
-      ? `<img class="thumb" src="${esc(src)}" alt=""
-              onerror="this.replaceWith(Object.assign(document.createElement('span'),
-                       {className:'dot'}))">`
-      : `<span class="dot${vis.length>1?" multi":""}"></span>`;
-    const html = `<span class="mk" style="--c:${c}">${inner}` +
-      (vis.length>1 && src ? `<i class="cnt">+${vis.length-1}</i>` : "") + `</span>`;
-    const m = L.marker([s.lat,s.lng],{
-      icon: L.divIcon({className:"pin"+(selected===s.locId?" sel":""), html, iconSize:[0,0]}),
-      riseOnHover:true, zIndexOffset: Math.round(scoreOf(s)*10)
-    }).addTo(layer);
-    // hover names the bird even when the map is showing bare dots
-    m.bindTooltip(vis.map(r=>esc(r.name)).join(" · ") + "<br><span style='opacity:.7'>"
-                  + esc(s.name) + "</span>",
-                  {direction:"top", offset:[0,-8], opacity:.95});
-    m.bindPopup(`<div class="pt">${esc(s.name)}</div>
-      ${fmtMin(s.driveMin)?fmtMin(s.driveMin)+" drive · ":""}${fmtDist(s.driveKm ?? s.distKm)} ·
-      ${s.priv?"personal location":"hotspot"} · ${ago(s.last)}
-      <ul>${vis.slice(0,8).map(r=>`<li>${swatch(r.code)}<span>${esc(r.name)}
-        <span style="opacity:.6">${ago(r.dt)}</span></span></li>`).join("")}</ul>
-      <a href="#" data-route="${esc(s.locId)}">show route</a> ·
-      <a href="https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}"
-         target="_blank" rel="noopener">open in Maps</a>
-      ${s.priv?"":` · <a href="https://ebird.org/hotspot/${esc(s.locId)}" target="_blank" rel="noopener">eBird</a>`}`);
-    m.on("click",()=>{ selected=s.locId; highlight(s.locId,false); });
-    markers[s.locId]=m;
+    const m = L.marker([s.lat,s.lng], {icon:iconFor(s,"dot"), riseOnHover:true,
+                                       zIndexOffset:Math.round(scoreOf(s)*10)});
+    m.site = s;
+    if(canHover()) m.bindTooltip(`<b>${esc(visible(s).map(r=>r.name).join(", "))}</b><br><small>${esc(s.title)}</small>`,
+                                 {direction:"top", offset:[0,-16], opacity:1});
+    m.on("click", ()=>openPlace(s.locId));
+    m.addTo(layer);
+    markers[s.locId] = m;
   }
-  // Fit once per search only. Refitting on every redraw would fight the user:
-  // their zoom-out fires zoomend -> drawMap -> fitBounds -> snapped back.
-  if(arr.length && pendingFit){
-    const g=L.featureGroup(Object.values(markers).concat(homeMarker?[homeMarker]:[]));
-    try{ map.fitBounds(g.getBounds().pad(.15)); }catch(e){}
+  if(pendingFit && shown.length){
     pendingFit = false;
+    const g = L.featureGroup(Object.values(markers).concat(homeMarker ? [homeMarker] : []));
+    try{ map.fitBounds(g.getBounds(), {...fitPad(), maxZoom:14, animate:false}); }catch(e){}
+  }
+  refreshIcons(true);
+}
+function markSelected(){
+  for(const [id,m] of Object.entries(markers)){
+    const el = m.getElement();
+    if(el) el.classList.toggle("sel", id===current);
   }
 }
-
-function highlight(locId, pan=true){
-  document.querySelectorAll(".site.hl").forEach(el=>el.classList.remove("hl"));
-  const el = document.querySelector(`.site[data-loc="${CSS.escape(locId)}"]`);
-  if(el){ el.classList.add("hl"); el.scrollIntoView({block:"nearest",behavior:"smooth"}); }
-  const m = markers[locId];
-  if(m && pan){ map.panTo(m.getLatLng()); m.openPopup(); }
+function clearRoute(){
+  if(routeLayer){ map.removeLayer(routeLayer); routeLayer = null; }
+  routeState = null;
 }
 
-/* ---------- location ------------------------------------------------------- */
-function setHome(lat,lng,name){
-  store.home={lat,lng,name:name||"custom"};
-  $("#lat").value=lat.toFixed(5); $("#lng").value=lng.toFixed(5);
-  $("#loclabel").textContent=`${lat.toFixed(4)}, ${lng.toFixed(4)} · ${name||"custom"}`;
-  if(map){ map.setView([lat,lng],Math.max(map.getZoom(),11)); drawMap(currentShown); }
+/* ---------- navigation inside the panel ------------------------------------- */
+function goList(render=true){
+  view = "list"; current = null; clearRoute(); markSelected();
+  if(render) renderPanel();
+}
+function openPlace(id){
+  const s = siteBy(id); if(!s) return;
+  clearRoute();
+  view = "place"; current = id; markSelected();
+  toggleOpts(false);
+  renderPanel(); $("#scroll").scrollTop = 0;
+  if(isMobile() && sheetState==="peek") setSheet("half");
+  const m = markers[id];
+  if(m){
+    const pt = map.latLngToContainerPoint(m.getLatLng()), sz = map.getSize(), pad = fitPad();
+    const [l,t] = pad.paddingTopLeft, [r,b] = pad.paddingBottomRight;
+    if(pt.x<l || pt.y<t || pt.x>sz.x-r || pt.y>sz.y-b)
+      map.panTo(m.getLatLng(), {animate:true});
+  }
+}
+async function openRoute(){
+  const s = siteBy(current), home = store.home;
+  if(!s || !home) return;
+  view = "route"; routeState = {locId:s.locId, loading:true}; renderPanel();
+  const from = `${home.lng.toFixed(5)},${home.lat.toFixed(5)}`, to = `${s.lng.toFixed(5)},${s.lat.toFixed(5)}`;
+  let d = null;
+  try{
+    const r = await fetch(`${OSRM_ROUTE}${from};${to}?overview=full&geometries=geojson&steps=true`);
+    d = r.ok ? await r.json() : null;
+  }catch(e){}
+  if(view!=="route" || routeState?.locId!==s.locId) return;          // user moved on
+  if(!d || d.code!=="Ok" || !d.routes?.length){ routeState = {locId:s.locId, error:true}; renderPanel(); return; }
+  const route = d.routes[0], ll = route.geometry.coordinates.map(c=>[c[1],c[0]]);
+  if(routeLayer) map.removeLayer(routeLayer);
+  routeLayer = L.layerGroup([
+    L.polyline(ll, {color:"#fff", weight:9, opacity:.95, interactive:false}),
+    L.polyline(ll, {color:"#1a6fe0", weight:5, opacity:1, interactive:false})
+  ]).addTo(map);
+  map.fitBounds(L.latLngBounds(ll), {...fitPad()});
+  routeState = {locId:s.locId, route};
+  renderPanel(); $("#scroll").scrollTop = 0;
 }
 
-/* ---------- wiring --------------------------------------------------------- */
-function addTarget(q){
-  const t = resolve(q);
-  if(!t) return fail(`Nothing matched “${q}”.`);
-  if(targets.some(x=>x.label===t.label)) return;
-  targets.push(t); fail(""); drawChips();
-  localStorage.setItem(LS.targets,JSON.stringify(targets.map(x=>x.q)));
+/* ---------- location -------------------------------------------------------- */
+function setHome(lat, lng, name){
+  store.home = {lat, lng, name};
+  renderHeader();
+  if($("#opts").classList.contains("on")) renderOpts();
+  if(homeMarker) homeMarker.setLatLng([lat,lng]);
+  if(!sites.length) map.setView([lat,lng], 11);
+  pendingFit = true;
+  scheduleSearch(0);
 }
-function drawChips(){
-  $("#chips").innerHTML = targets.map((t,i)=>
-    `<span class="chip" title="${esc(t.detail || t.label)} — ${t.codes.length} species">
-      <b>${esc(t.label)}</b><span style="opacity:.65">${t.codes.length}</span>
-      <span class="x" data-i="${i}">×</span></span>`).join("");
+function useMyLocation(){
+  if(!navigator.geolocation){ toast("Location isn't available here"); return; }
+  toast("Finding you…");
+  navigator.geolocation.getCurrentPosition(
+    p=>setHome(p.coords.latitude, p.coords.longitude, "you"),
+    ()=>toast("Location blocked. Try “Pick on map”"),
+    {timeout:10000, maximumAge:300000});
 }
-$("#chips").addEventListener("click",e=>{
-  const i=e.target.dataset.i; if(i==null) return;
-  targets.splice(+i,1); drawChips();
-  localStorage.setItem(LS.targets,JSON.stringify(targets.map(x=>x.q)));
+function pickOnMap(){
+  picking = true; map.getContainer().style.cursor = "crosshair";
+  if(isMobile()) setSheet("peek");
+  toast("Tap the map to set your location", 4000);
+}
+
+/* ---------- phone bottom sheet ---------------------------------------------- */
+let sheetState = "half";
+function snaps(){
+  const top = $("#grab").offsetHeight + document.querySelector(".top").offsetHeight;
+  return {peek:top + 4, half:Math.round(innerHeight*.52), full:innerHeight - 56};
+}
+function setSheet(st){
+  sheetState = st;
+  if(!isMobile()){ document.documentElement.style.removeProperty("--sheet"); return; }
+  const S = snaps();
+  document.documentElement.style.setProperty("--sheet", Math.max(S[st], S.peek) + "px");
+}
+(function sheetDrag(){
+  const grab = $("#grab"), panel = $("#panel"); let d = null;
+  grab.addEventListener("pointerdown", e=>{
+    if(!isMobile()) return;
+    d = {y:e.clientY, h:panel.offsetHeight, moved:false};
+    panel.classList.add("dragging"); grab.setPointerCapture(e.pointerId);
+  });
+  grab.addEventListener("pointermove", e=>{
+    if(!d) return;
+    const dy = d.y - e.clientY; if(Math.abs(dy)>4) d.moved = true;
+    const S = snaps();
+    document.documentElement.style.setProperty("--sheet", Math.min(S.full, Math.max(S.peek, d.h+dy)) + "px");
+  });
+  const end = ()=>{
+    if(!d) return;
+    panel.classList.remove("dragging");
+    if(!d.moved) setSheet(sheetState==="peek" ? "half" : sheetState==="half" ? "full" : "half");
+    else{
+      const S = snaps(), h = panel.offsetHeight;
+      setSheet(Object.entries(S).sort((a,b)=>Math.abs(a[1]-h)-Math.abs(b[1]-h))[0][0]);
+    }
+    d = null;
+  };
+  grab.addEventListener("pointerup", end); grab.addEventListener("pointercancel", end);
+})();
+
+let toastT;
+function toast(m, ms=2200){
+  const t = $("#toast"); t.textContent = m; t.classList.add("on");
+  clearTimeout(toastT); toastT = setTimeout(()=>t.classList.remove("on"), ms);
+}
+
+/* ---------- events ---------------------------------------------------------- */
+const qIn = $("#q"), suggBox = $("#sugg");
+let suggList = [], suggIdx = -1;
+function closeSugg(){ suggBox.classList.remove("on"); suggList = []; suggIdx = -1; }
+qIn.addEventListener("input", ()=>{
+  suggList = suggest(qIn.value); suggIdx = -1;
+  suggBox.innerHTML = suggList.map((s,i)=>`<div data-i="${i}"><span class="k">${s.type}</span>
+    <span class="n">${esc(s.name)}</span><span class="c">${s.count!=null ? s.count+" species" : ""}</span></div>`).join("");
+  suggBox.classList.toggle("on", suggList.length>0);
 });
-
-const qIn=$("#q"), suggBox=$("#sugg");
-let suggIdx=-1, suggList=[];
-qIn.addEventListener("input",()=>{
-  suggList=suggest(qIn.value); suggIdx=-1;
-  suggBox.innerHTML=suggList.map((s,i)=>
-    `<div data-i="${i}"><span class="t">${s.type}</span><span class="n">${esc(s.name)}</span>
-     <span class="c">${s.count!=null?s.count+" spp":esc(s.sub||"")}</span></div>`).join("");
-  suggBox.classList.toggle("on",suggList.length>0);
-});
-qIn.addEventListener("keydown",e=>{
+qIn.addEventListener("focus", ()=>{ if(isMobile()) setSheet("full"); });
+qIn.addEventListener("keydown", e=>{
   if(e.key==="ArrowDown"||e.key==="ArrowUp"){
     e.preventDefault();
-    suggIdx=Math.max(0,Math.min(suggList.length-1,suggIdx+(e.key==="ArrowDown"?1:-1)));
-    [...suggBox.children].forEach((c,i)=>c.classList.toggle("sel",i===suggIdx));
+    suggIdx = Math.max(0, Math.min(suggList.length-1, suggIdx+(e.key==="ArrowDown"?1:-1)));
+    [...suggBox.children].forEach((c,i)=>c.classList.toggle("sel", i===suggIdx));
   }else if(e.key==="Enter"){
-    addTarget(suggIdx>=0?suggList[suggIdx].name:qIn.value);
-    qIn.value=""; suggBox.classList.remove("on"); suggList=[]; suggIdx=-1;
-  }else if(e.key==="Escape") suggBox.classList.remove("on");
+    const pick = suggIdx>=0 ? suggList[suggIdx].q : (suggList[0]?.q || qIn.value);
+    if(pick.trim()) addTyped(pick);
+  }else if(e.key==="Escape"){ closeSugg(); qIn.blur(); }
 });
-suggBox.addEventListener("click",e=>{
-  const d=e.target.closest("[data-i]"); if(!d) return;
-  addTarget(suggList[+d.dataset.i].name); qIn.value=""; suggBox.classList.remove("on");
+suggBox.addEventListener("click", e=>{
+  const d = e.target.closest("[data-i]"); if(d) addTyped(suggList[+d.dataset.i].q);
 });
-document.addEventListener("click",e=>{ if(!e.target.closest(".searchbox")) suggBox.classList.remove("on"); });
+function addTyped(q){
+  qIn.value = ""; closeSugg(); qIn.blur();
+  if(isMobile()) setSheet("half");
+  if(!targets.some(t=>t.q.toLowerCase()===q.toLowerCase()) || notable) toggleTarget(q);
+}
+document.addEventListener("click", e=>{ if(!e.target.closest("#searchBox")) closeSugg(); });
 
-$("#quick").innerHTML = QUICK.map(q=>`<button data-q="${q}">${q}</button>`).join("");
-$("#quick").addEventListener("click",e=>{ if(e.target.dataset.q) addTarget(e.target.dataset.q); });
-
-$("#rlist").addEventListener("click",e=>{
-  if(e.target.closest("[data-route]")) return;        // handled below
-  const el=e.target.closest("[data-loc]");
-  if(el){ selected=el.dataset.loc; highlight(el.dataset.loc); }
+$("#chips").addEventListener("click", e=>{
+  const b = e.target.closest("button"); if(!b) return;
+  if(b.hasAttribute("data-rare")){
+    notable = !notable; saveTargets(); renderChips(); scheduleSearch(); return;
+  }
+  if(b.dataset.rm){ targets = targets.filter(t=>t.q!==b.dataset.rm); saveTargets(); renderChips(); scheduleSearch(); return; }
+  if(b.dataset.q) toggleTarget(b.dataset.q);
 });
-// delegated on document so it works from the results list AND from map popups
-document.addEventListener("click", e=>{
-  const link = e.target.closest("[data-route]");
-  if(link){
-    e.preventDefault(); e.stopPropagation();
-    const s = sites.find(x=>x.locId===link.dataset.route);
-    if(s) s.locId===routeFor ? clearRoute() : showRoute(s);
+$("#distSeg").addEventListener("click", e=>{
+  const b = e.target.closest("[data-dist]"); if(!b) return;
+  prefs.dist = +(b.dataset.dist * (store.units==="mi" ? 1.609344 : 1)).toFixed(1);
+  jset(LS.dist, prefs.dist); renderSegs(); pendingFit = true; scheduleSearch();
+});
+$("#daysSeg").addEventListener("click", e=>{
+  const b = e.target.closest("[data-days]"); if(!b) return;
+  prefs.back = +b.dataset.days; jset(LS.back, prefs.back); renderSegs(); scheduleSearch();
+});
+$("#locBtn").addEventListener("click", ()=>toggleOpts(true));
+$("#optBtn").addEventListener("click", ()=>toggleOpts());
+$("#optBtnM").addEventListener("click", e=>{ e.stopPropagation(); toggleOpts(); });
+
+$("#opts").addEventListener("change", e=>{
+  const k = e.target.dataset.opt;
+  if(k){
+    opts[k] = e.target.checked; jset(LS.opts, opts);
+    if(k==="hotspots") scheduleSearch(0);
+    else if(k==="unconfirmed") { if(lastObs.length) rebuild(false); }
+    else if(k==="photos") refreshIcons(true);
+    else if(k==="drive" && opts.drive && sites.length && store.home)
+      addDriveTimes(sites, store.home).then(ok=>{ if(ok) renderPanel(); });
+    else renderPanel();
+  }
+  if(e.target.id==="keyIn"){ store.token = e.target.value.trim(); memo.clear(); scheduleSearch(0); }
+});
+$("#opts").addEventListener("click", e=>{
+  const u = e.target.closest("[data-unit]"), n = e.target.closest("[data-min]");
+  if(u){ store.units = u.dataset.unit; renderOpts(); renderSegs(); renderPanel(); }
+  if(n){ opts.minSpp = +n.dataset.min; jset(LS.opts, opts); renderOpts(); renderPanel(); drawMap(); }
+});
+
+$("#scroll").addEventListener("click", e=>{
+  const a = e.target.closest("[data-act]");
+  if(a){
+    const act = a.dataset.act;
+    if(act==="list") goList();
+    else if(act==="place"){ clearRoute(); view = "place"; renderPanel(); }
+    else if(act==="route") openRoute();
+    else if(act==="geo") useMyLocation();
+    else if(act==="pick") pickOnMap();
+    else if(act==="days30"){ prefs.back = 30; jset(LS.back, 30); renderSegs(); scheduleSearch(0); }
+    else if(act==="distMax"){ const u = store.units; prefs.dist = +(DIST[u].slice(-1)[0]*(u==="mi"?1.609344:1)).toFixed(1);
+      jset(LS.dist, prefs.dist); renderSegs(); pendingFit = true; scheduleSearch(0); }
+    else if(act==="saveKey"){ const v = $("#obKey")?.value.trim(); if(v){ store.token = v; renderPanel(); scheduleSearch(0); } }
     return;
   }
-  if(e.target.id==="rtClose"){ e.preventDefault(); clearRoute(); }
+  const f = e.target.closest("[data-focus]");
+  if(f){ const c = f.dataset.focus || null; focus = c===focus ? null : c; renderPanel(); drawMap(); return; }
+  const g = e.target.closest("[data-group]");
+  if(g){ group = g.dataset.group; renderPanel(); return; }
+  const loc = e.target.closest("[data-loc]");
+  if(loc) openPlace(loc.dataset.loc);
 });
-$("#legend").addEventListener("click",e=>{
-  if(e.target.id==="legAll"){ hidden.clear(); render(); return; }
-  const row=e.target.closest("[data-code]"); if(!row) return;
-  const c=row.dataset.code;
-  hidden.has(c) ? hidden.delete(c) : hidden.add(c);
-  render();
+$("#scroll").addEventListener("change", e=>{
+  if(e.target.id==="sortSel"){ sort = e.target.value; renderPanel(); }
 });
-document.querySelectorAll(".seg button").forEach(b=>b.addEventListener("click",()=>{
-  document.querySelectorAll(".seg button").forEach(x=>x.classList.remove("on"));
-  b.classList.add("on"); view=b.dataset.view; render();
-}));
-$("#sort").addEventListener("change",()=>render());
-$("#photos").addEventListener("change",()=>{ if(sites.length) render(); });
-$("#minSpp").addEventListener("input",()=>{
-  $("#minSppOut").textContent=$("#minSpp").value+"+";
-  if(sites.length) render();
+// hovering a result lifts its pin on the map
+$("#scroll").addEventListener("mouseover", e=>{
+  const el = e.target.closest("[data-loc]");
+  document.querySelectorAll(".pin.hl").forEach(p=>p.classList.remove("hl"));
+  if(el) markers[el.dataset.loc]?.getElement()?.classList.add("hl");
 });
-$("#dist").addEventListener("input",()=>$("#distOut").textContent=fmtDist(+$("#dist").value));
-$("#back").addEventListener("input",()=>$("#backOut").textContent=$("#back").value+" d");
-$("#go").addEventListener("click",()=>search(false));
-$("#btnNotable").addEventListener("click",()=>search(true));
-$("#btnSettings").addEventListener("click",()=>{
-  const s=$("#setup"); s.style.display = s.style.display==="none" ? "" : "none";
+$("#scroll").addEventListener("mouseleave", ()=>document.querySelectorAll(".pin.hl").forEach(p=>p.classList.remove("hl")));
+document.addEventListener("keydown", e=>{
+  if(e.key!=="Escape" || document.activeElement===qIn) return;
+  if(view==="route"){ clearRoute(); view = "place"; renderPanel(); }
+  else if(view==="place") goList();
+  else if($("#opts").classList.contains("on")) toggleOpts(false);
 });
-$("#token").addEventListener("change",e=>{ store.token=e.target.value.trim(); fail(""); });
-$("#btnGeo").addEventListener("click",()=>{
-  if(!navigator.geolocation) return $("#setupErr").textContent="Geolocation unavailable — enter lat/lng or click the map.";
-  $("#setupErr").textContent="locating…";
-  navigator.geolocation.getCurrentPosition(
-    p=>{ setHome(p.coords.latitude,p.coords.longitude,"current location"); $("#setupErr").textContent=""; },
-    e=>$("#setupErr").textContent="Location denied ("+e.message+"). Enter lat/lng, or use “click map”.",
-    {timeout:10000});
-});
-$("#btnPick").addEventListener("click",()=>{
-  picking=true; map.getContainer().style.cursor="crosshair";
-  $("#setupErr").textContent="Click anywhere on the map to set your location.";
-});
-for(const id of ["#lat","#lng"]) $(id).addEventListener("change",()=>{
-  const la=parseFloat($("#lat").value), ln=parseFloat($("#lng").value);
-  if(isFinite(la)&&isFinite(ln)) setHome(la,ln,"manual");
-});
-document.querySelectorAll("input[name=units]").forEach(r=>r.addEventListener("change",e=>{
-  store.units=e.target.value;
-  $("#distOut").textContent=fmtDist(+$("#dist").value);
-  if(sites.length) render();
-}));
 
-/* ---------- boot ----------------------------------------------------------- */
+/* ---------- boot ------------------------------------------------------------ */
 (async function boot(){
-  initMap();
-  loadImgCache();
-  $("#token").value = localStorage.getItem(LS.token) || "";
-  document.querySelector(`input[name=units][value="${store.units}"]`).checked = true;
-  $("#distOut").textContent=fmtDist(+$("#dist").value);
-  $("#backOut").textContent=$("#back").value+" d";
-  $("#minSppOut").textContent="1+";
-  const h=store.home;
-  if(h) setHome(h.lat,h.lng,h.name);
-  if(!h || !store.token) $("#setup").style.display="";   // first run: ask for what's missing
-  try{ await loadTaxonomy(); }catch(e){ note("taxonomy failed: "+e.message); }
-  try{ for(const q of JSON.parse(localStorage.getItem(LS.targets)||"[]")) addTarget(q); }catch(e){}
+  $("#brand").innerHTML = I("bird",20) + "birdfinder";
+  $("#searchIcon").innerHTML = I("search",18);
+  $("#optBtn").innerHTML = $("#optBtnM").innerHTML = I("sliders",18);
+  initMap(); loadImgCache();
+  renderHeader(); renderSegs(); renderChips(); setSheet("half");
+  renderPanel();
+  try{ await loadTaxonomy(); }catch(e){ banner("Couldn't load the bird list. Check your connection and reload."); }
+  notable = localStorage.getItem(LS.mode)==="rare";
+  for(const q of jget(LS.targets, [])){ const t = resolve(q); if(t) targets.push(t); }
+  renderChips();
+  if(store.token && store.home && (notable || targets.length)) search();
+  else renderPanel();
 })();
 </script>
 </body>
